@@ -65,7 +65,15 @@ export function usePortfolio(view: AccountData | undefined) {
   const rate = usdKrw ?? 1_400;
   const quotes = Object.fromEntries(view.positions.map((p) => [p.code, live.getQuote(p.code)]));
   const ev = evaluatePortfolio({ cash: view.cash, positions: Object.fromEntries(view.positions.map((p) => [p.code, p])) }, quotes, rate);
-  // '오늘 수익'은 오늘 산 주식까지 정확히 따지려면 하루 시작 자산 기록이 필요 → M3(통계)에서
   const totalPnlKrw = ev.totalKrw - view.seedKrw;
-  return { ...ev, usdKrw: rate, totalPnlKrw, totalReturnRate: totalPnlKrw / view.seedKrw };
+  // 오늘 수익 = 지금 총자산 - 오늘 오전 7시 총자산 (오늘 산 주식도 산 가격 기준으로 정확)
+  const dayPnlKrw = view.dayBase ? ev.totalKrw - view.dayBase.totalKrw : undefined;
+  return {
+    ...ev,
+    usdKrw: rate,
+    totalPnlKrw,
+    totalReturnRate: totalPnlKrw / view.seedKrw,
+    dayPnlKrw,
+    dayReturnRate: dayPnlKrw !== undefined && view.dayBase ? dayPnlKrw / view.dayBase.totalKrw : undefined,
+  };
 }

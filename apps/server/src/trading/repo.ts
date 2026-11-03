@@ -1,6 +1,15 @@
 import type { Cash, Currency, Fill, FxTrade, Order, OrderStatus, Position } from '@stock/shared';
 import type { DatabaseSync } from 'node:sqlite';
 
+export interface SnapshotRow {
+  day: string;
+  totalKrw: number;
+  stockKrw: number;
+  cash: Cash;
+  usdKrw: number;
+  createdAt: number;
+}
+
 export interface AccountRow {
   id: number;
   season: number;
@@ -215,4 +224,36 @@ export class TradingRepo {
       executedAt: r.executed_at as number,
     }));
   }
+
+  /** 하루 기록은 하루 한 번만 (이미 있으면 무시) */
+  insertSnapshot(accountId: number, snap: SnapshotRow): void {
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO daily_snapshots (account_id, day, total_krw, stock_krw, cash_krw, cash_usd, usd_krw, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(accountId, snap.day, snap.totalKrw, snap.stockKrw, snap.cash.KRW, snap.cash.USD, snap.usdKrw, snap.createdAt);
+  }
+
+  snapshot(accountId: number, day: string): SnapshotRow | undefined {
+    const r = this.db.prepare('SELECT * FROM daily_snapshots WHERE account_id = ? AND day = ?').get(accountId, day) as Row | undefined;
+    return r ? toSnapshot(r) : undefined;
+  }
+
+  /** 오래된 것부터 */
+  snapshots(accountId: number, limit = 400): SnapshotRow[] {
+    const rows = this.db.prepare('SELECT * FROM daily_snapshots WHERE account_id = ? ORDER BY day DESC LIMIT ?').all(accountId, limit) as Row[];
+    return rows.map(toSnapshot).reverse();
+  }
+}
+
+function toSnapshot(r: Row): SnapshotRow {
+  return {
+    day: r.day as string,
+    totalKrw: r.total_krw as number,
+    stockKrw: r.stock_krw as number,
+    cash: { KRW: r.cash_krw as number, USD: r.cash_usd as number },
+    usdKrw: r.usd_krw as number,
+    createdAt: r.created_at as number,
+  };
 }

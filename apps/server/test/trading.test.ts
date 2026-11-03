@@ -240,3 +240,36 @@ describe('계좌 리셋', () => {
     expect(prev?.endedAt).toBeDefined();
   });
 });
+
+describe('하루 자산 기록 (오늘 수익)', () => {
+  it('하루 경계는 한국시간 오전 7시', async () => {
+    const { dayKey } = await import('../src/trading/service');
+    expect(dayKey(Date.parse('2026-11-03T21:59:00Z'))).toBe('2026-11-03'); // 11/4 06:59 KST
+    expect(dayKey(Date.parse('2026-11-03T22:00:00Z'))).toBe('2026-11-04'); // 11/4 07:00 KST
+  });
+
+  it('계좌를 열면 오늘 시작 자산 = 1,000만원', () => {
+    const { svc } = setup();
+    expect(svc.view().dayBase).toEqual({ day: '2026-11-03', totalKrw: 10_000_000 });
+  });
+
+  it('다음 날 오전 7시 이후 첫 확인 때 그 시점 자산을 한 번만 기록', async () => {
+    const { svc, provider, setNow } = setup();
+    await svc.placeOrder({ code: '005930', side: 'buy', type: 'limit', qty: 10, limitPrice: 70_000 });
+    provider.prices.set('005930', 72_000);
+    setNow(Date.parse('2026-11-03T22:30:00Z')); // 11/4 07:30 KST
+    const snap = await svc.snapshotIfDue();
+    expect(snap).toMatchObject({ day: '2026-11-04', totalKrw: 10_000_000 - 700_105 + 720_000, stockKrw: 720_000 });
+    provider.prices.set('005930', 80_000);
+    expect((await svc.snapshotIfDue())?.totalKrw).toBe(snap?.totalKrw);
+    expect(svc.snapshots().map((s) => s.day)).toEqual(['2026-11-03', '2026-11-04']);
+    expect(svc.view().dayBase?.totalKrw).toBe(snap?.totalKrw);
+  });
+
+  it('리셋하면 새 시즌도 시작 기록', async () => {
+    const { svc } = setup();
+    await svc.reset();
+    expect(svc.snapshots()).toHaveLength(1);
+    expect(svc.view().dayBase?.totalKrw).toBe(10_000_000);
+  });
+});

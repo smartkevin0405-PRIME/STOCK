@@ -68,6 +68,20 @@ const MIGRATIONS: string[] = [
     executed_at INTEGER NOT NULL
   );
   `,
+  // v2: 하루 자산 기록 (오늘 수익, 자산 추이, 수익 캘린더용)
+  `
+  CREATE TABLE daily_snapshots (
+    account_id INTEGER NOT NULL,
+    day TEXT NOT NULL,
+    total_krw REAL NOT NULL,
+    stock_krw REAL NOT NULL,
+    cash_krw REAL NOT NULL,
+    cash_usd REAL NOT NULL,
+    usd_krw REAL NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (account_id, day)
+  );
+  `,
 ];
 
 /** DB 열기 + 스키마 맞추기. ':memory:'는 테스트용 */

@@ -39,10 +39,18 @@ export function Home() {
         </div>
         <p className="mt-1 text-[28px] font-bold">{pf ? formatMoney(pf.totalKrw, 'KRW') : '…'}</p>
         {pf && (
-          <p className={`mt-0.5 text-sm font-medium ${changeColor(pf.totalPnlKrw)}`}>
-            {formatSigned(pf.totalPnlKrw, 'KRW')}원 ({formatRate(pf.totalReturnRate)})
-            <span className="ml-1.5 font-normal text-sub">시작 대비</span>
-          </p>
+          <div className="mt-1 space-y-0.5 text-sm">
+            {pf.dayPnlKrw !== undefined && (
+              <p className={`font-medium ${changeColor(pf.dayPnlKrw)}`}>
+                <span className="mr-1.5 font-normal text-sub">오늘</span>
+                {formatSigned(pf.dayPnlKrw, 'KRW')}원 ({formatRate(pf.dayReturnRate ?? 0)})
+              </p>
+            )}
+            <p className={`font-medium ${changeColor(pf.totalPnlKrw)}`}>
+              <span className="mr-1.5 font-normal text-sub">시작 대비</span>
+              {formatSigned(pf.totalPnlKrw, 'KRW')}원 ({formatRate(pf.totalReturnRate)})
+            </p>
+          </div>
         )}
         <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
           <Link to="/fx" className="rounded-xl bg-soft px-3 py-2.5">

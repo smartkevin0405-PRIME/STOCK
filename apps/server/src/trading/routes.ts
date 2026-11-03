@@ -30,6 +30,10 @@ export function registerTradingRoutes(app: FastifyInstance, trading: TradingServ
 
   app.get('/api/seasons', async () => ({ seasons: trading.seasons() }));
 
+  app.get<{ Querystring: { limit?: string } }>('/api/snapshots', async (req) => ({
+    snapshots: trading.snapshots(Math.min(Number(req.query.limit) || 400, 2_000)),
+  }));
+
   app.get<{ Querystring: { status?: string; limit?: string } }>('/api/orders', async (req) => {
     const orders = req.query.status === 'open' ? trading.openOrders() : trading.orders(Math.min(Number(req.query.limit) || 100, 500));
     return { orders, stocks: await stocksOf(orders.map((o) => o.code)) };

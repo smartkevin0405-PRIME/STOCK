@@ -150,6 +150,8 @@ export interface AccountView {
   /** 이번 시즌 실현손익 (통화별) */
   realizedPnl: Cash;
   openOrders: number;
+  /** 오늘(한국시간 오전 7시 기준) 시작 총자산 → '오늘 수익' 계산용 */
+  dayBase?: { day: string; totalKrw: number };
 }
 
 export interface SeasonSummary {

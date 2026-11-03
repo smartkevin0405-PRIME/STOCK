@@ -29,7 +29,12 @@ import type {
 import type { DatabaseSync } from 'node:sqlite';
 import type { MarketDataProvider } from '../market/provider';
 import { transaction } from './db';
-import { TradingRepo, type AccountRow } from './repo';
+import { TradingRepo, type AccountRow, type SnapshotRow } from './repo';
+
+/** 하루 = 한국시간 오전 7시 ~ 다음 날 오전 7시 (미국 장 끝난 뒤, 한국 장 열리기 전) */
+export function dayKey(ms: number): string {
+  return new Date(ms + (9 - 7) * 3_600_000).toISOString().slice(0, 10);
+}
 
 export const SEED_KRW = 10_000_000;
 
@@ -76,6 +81,7 @@ export class TradingService {
   private readonly seedKrw: number;
   private readonly listeners = new Set<(e: AccountEvent) => void>();
   private timer: ReturnType<typeof setInterval> | undefined;
+  private snapshotTimer: ReturnType<typeof setInterval> | undefined;
   private processing = false;
 
   constructor(o: TradingServiceOptions) {
@@ -91,22 +97,49 @@ export class TradingService {
     return () => this.listeners.delete(listener);
   }
 
-  /** 미체결 주문 감시 시작 (3초마다) */
+  /** 미체결 주문 감시 시작 (3초마다) + 하루 자산 기록 (1분마다 확인) */
   start(intervalMs = 3_000): void {
     this.syncWatch();
     this.timer ??= setInterval(() => void this.processOpenOrders().catch(() => undefined), intervalMs);
+    void this.snapshotIfDue().catch(() => undefined);
+    this.snapshotTimer ??= setInterval(() => void this.snapshotIfDue().catch(() => undefined), 60_000);
   }
 
   stop(): void {
     clearInterval(this.timer);
+    clearInterval(this.snapshotTimer);
     this.timer = undefined;
+    this.snapshotTimer = undefined;
   }
 
   // ── 계좌 ──────────────────────────────────────────────
 
   /** 지금 시즌 계좌 (없으면 시즌 1 생성) */
   account(): AccountRow {
-    return this.repo.activeAccount() ?? this.repo.createAccount(1, this.seedKrw, this.now());
+    return this.repo.activeAccount() ?? this.openAccount(1);
+  }
+
+  /** 새 계좌 + 시작 기록 (현금만 있으니 총자산 = 시드) */
+  private openAccount(season: number): AccountRow {
+    const acc = this.repo.createAccount(season, this.seedKrw, this.now());
+    this.repo.insertSnapshot(acc.id, { day: dayKey(this.now()), totalKrw: this.seedKrw, stockKrw: 0, cash: acc.cash, usdKrw: 0, createdAt: this.now() });
+    return acc;
+  }
+
+  /** 오늘 기록이 없으면 지금 자산으로 남김 (오전 7시 이후 첫 확인 때) */
+  async snapshotIfDue(): Promise<SnapshotRow | undefined> {
+    const acc = this.account();
+    const day = dayKey(this.now());
+    const existing = this.repo.snapshot(acc.id, day);
+    if (existing) return existing;
+    const v = await this.valueOf(acc);
+    const snap: SnapshotRow = { day, totalKrw: v.totalKrw, stockKrw: v.stockValueKrw, cash: acc.cash, usdKrw: v.usdKrw, createdAt: this.now() };
+    this.repo.insertSnapshot(acc.id, snap);
+    return this.repo.snapshot(acc.id, day);
+  }
+
+  snapshots(limit?: number): SnapshotRow[] {
+    return this.repo.snapshots(this.account().id, limit);
   }
 
   view(): AccountView {
@@ -127,6 +160,10 @@ export class TradingService {
       sellable: Object.fromEntries(Object.values(positions).map((p) => [p.code, Math.max(0, p.qty - (pendingSell[p.code] ?? 0))])),
       realizedPnl: this.repo.realizedPnl(acc.id),
       openOrders: this.repo.openOrders(acc.id).length,
+      ...(() => {
+        const base = this.repo.snapshot(acc.id, dayKey(this.now()));
+        return base ? { dayBase: { day: base.day, totalKrw: base.totalKrw } } : {};
+      })(),
     };
   }
 
@@ -307,18 +344,12 @@ export class TradingService {
   /** 지금 시즌 마감(최종 자산 기록) → 새 시즌 1,000만원으로 시작 */
   async reset(): Promise<AccountView> {
     const acc = this.account();
-    const positions = this.repo.positions(acc.id);
-    const codes = Object.keys(positions);
-    const [quotes, usdKrw] = await Promise.all([
-      codes.length ? this.provider.getQuotes(codes) : Promise.resolve([] as Quote[]),
-      this.provider.getUsdKrw().catch(() => 1_400),
-    ]);
-    const finalKrw = evaluatePortfolio({ cash: acc.cash, positions }, Object.fromEntries(quotes.map((q) => [q.code, q])), usdKrw).totalKrw;
+    const finalKrw = (await this.valueOf(acc)).totalKrw;
 
     const next = transaction(this.repo.db, () => {
       for (const o of this.repo.openOrders(acc.id)) this.repo.updateOrder(o.id, { status: 'cancelled', reason: '계좌 리셋으로 취소됐어요' }, this.now());
       this.repo.closeAccount(acc.id, this.now(), finalKrw);
-      return this.repo.createAccount(acc.season + 1, this.seedKrw, this.now());
+      return this.openAccount(acc.season + 1);
     });
     this.emit({ event: 'reset', season: next.season });
     this.syncWatch();
@@ -326,6 +357,18 @@ export class TradingService {
   }
 
   // ── 내부 ──────────────────────────────────────────────
+
+  /** 지금 시세로 계좌 평가 (원화 환산) */
+  private async valueOf(acc: AccountRow) {
+    const positions = this.repo.positions(acc.id);
+    const codes = Object.keys(positions);
+    const [quotes, usdKrw] = await Promise.all([
+      codes.length ? this.provider.getQuotes(codes) : Promise.resolve([] as Quote[]),
+      this.provider.getUsdKrw().catch(() => 1_400),
+    ]);
+    const ev = evaluatePortfolio({ cash: acc.cash, positions }, Object.fromEntries(quotes.map((q) => [q.code, q])), usdKrw);
+    return { ...ev, usdKrw };
+  }
 
   /** 장이 열렸는지: 우리 일정표 + 시세 소스가 알려주는 장 상태 (예상 못 한 휴장 대비) */
   private isOpen(market: Market, quote: Quote): boolean {
