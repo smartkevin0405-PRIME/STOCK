@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg: #f2f4f6;
+  --card: #ffffff;
+  --ink: #191f28;
+  --sub: #8b95a1;
+  --line: #e5e8eb;
+  --soft: #f2f4f6;
+}
+
+.dark {
+  --bg: #101013;
+  --card: #1b1b20;
+  --ink: #f2f4f6;
+  --sub: #8b8b96;
+  --line: #2c2c35;
+  --soft: #26262d;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-sub: var(--sub);
+  --color-line: var(--line);
+  --color-soft: var(--soft);
+}
+
+@theme {
+  --color-brand: #3182f6;
+  /* 한국식: 상승 빨강, 하락 파랑 */
+  --color-up: #f04452;
+  --color-down: #3182f6;
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-tap-highlight-color: transparent;
+  font-feature-settings: "tnum";
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
