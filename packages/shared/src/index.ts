@@ -122,3 +122,19 @@ export type ClientMessage = { type: 'subscribe'; codes: string[] };
 export function currencyOf(market: Market): Currency {
   return market === 'KR' ? 'KRW' : 'USD';
 }
+
+/** 시장별 시세 소스 상태 (화면에 "실시간 / 20분 지연" 표시용) */
+export interface SourceStatus {
+  /** 지금 시세를 주고 있는 소스 (예: naver, yahoo, mock) */
+  source: string;
+  /** 0이면 실시간 */
+  delayMinutes: number;
+  /** 최근 요청이 성공했는지 */
+  ok: boolean;
+}
+
+export interface DataStatus {
+  provider: string;
+  KR: SourceStatus;
+  US: SourceStatus;
+}

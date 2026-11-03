@@ -5,10 +5,11 @@ import { SEED_KRW } from '../lib/account';
 import { api } from '../lib/api';
 import { changeColor, formatDateTime, formatIndex, formatMoney, formatRate } from '../lib/format';
 import { live, useLiveConnected, useLiveIndices } from '../lib/live';
+import { statusLabel, useDataStatus } from '../lib/status';
 import { useAsync } from '../lib/useAsync';
 
 export function Home() {
-  const health = useAsync(() => api.health(), []);
+  const dataStatus = useDataStatus();
   const status = useAsync(() => api.marketStatus(), []);
   useAsync(() => api.indices().then((r) => live.seedIndices(r.indices)), []);
   const indices = useLiveIndices();
@@ -20,7 +21,7 @@ export function Home() {
       right={
         <span className="flex items-center gap-1.5 rounded-full bg-card px-2.5 py-1 text-xs font-medium text-sub">
           <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-[#00b386]' : 'bg-sub'}`} />
-          {health.data?.provider === 'mock' ? '가짜 시세' : (health.data?.provider ?? '연결 중')}
+          {statusLabel(dataStatus)}
         </span>
       }
     >

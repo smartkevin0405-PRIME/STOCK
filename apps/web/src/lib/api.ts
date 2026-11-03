@@ -1,4 +1,4 @@
-import type { Candle, CandleInterval, IndexQuote, Market, MarketStatus, Quote, StockInfo } from '@stock/shared';
+import type { Candle, CandleInterval, DataStatus, IndexQuote, Market, MarketStatus, Quote, StockInfo } from '@stock/shared';
 
 /** APK(Capacitor)에서는 서버 주소를 환경변수로 지정 */
 export const API_BASE: string = import.meta.env.VITE_API_BASE ?? '';
@@ -20,7 +20,7 @@ export interface StockWithQuote {
 export type RankingType = 'gainers' | 'losers' | 'turnover';
 
 export const api = {
-  health: () => get<{ ok: boolean; provider: string; delayMinutes: number }>('/api/health'),
+  health: () => get<{ ok: boolean } & DataStatus>('/api/health'),
   search: (q: string, limit = 30) =>
     get<{ items: StockWithQuote[] }>(`/api/stocks?q=${encodeURIComponent(q)}&limit=${limit}`),
   stock: (code: string) => get<StockWithQuote>(`/api/stocks/${encodeURIComponent(code)}`),

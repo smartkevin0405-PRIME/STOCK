@@ -15,7 +15,7 @@ afterAll(async () => {
 describe('API', () => {
   it('헬스체크', async () => {
     const res = await app.inject('/api/health');
-    expect(res.json()).toEqual({ ok: true, provider: 'mock', delayMinutes: 0 });
+    expect(res.json()).toMatchObject({ ok: true, provider: 'mock', KR: { source: 'mock', delayMinutes: 0 } });
   });
 
   it('초성 검색 + 시세 같이 반환', async () => {

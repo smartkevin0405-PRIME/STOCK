@@ -22,7 +22,7 @@ export async function buildApp({ provider, logger = false, indicesIntervalMs = 3
     return new Map(quotes.map((q) => [q.code, q]));
   };
 
-  app.get('/api/health', async () => ({ ok: true, provider: provider.name, delayMinutes: provider.delayMinutes }));
+  app.get('/api/health', async () => ({ ok: true, ...provider.status() }));
 
   // 검색 (q 없으면 전체)
   app.get<{ Querystring: { q?: string; limit?: string } }>('/api/stocks', async (req) => {
@@ -87,6 +87,11 @@ export async function buildApp({ provider, logger = false, indicesIntervalMs = 3
 
   // 실시간: 구독한 종목 시세 + 주기적 지수
   const clients = new Set<{ send: (m: ServerMessage) => void; codes: Set<string> }>();
+  const syncWatch = () => {
+    const all = new Set<string>();
+    for (const c of clients) for (const code of c.codes) all.add(code);
+    provider.watch(all);
+  };
 
   const offQuote = provider.onQuote((quote: Quote) => {
     for (const c of clients) if (c.codes.has(quote.code)) c.send({ type: 'quote', quote });
@@ -115,12 +120,16 @@ export async function buildApp({ provider, logger = false, indicesIntervalMs = 3
         const msg = JSON.parse(raw.toString()) as ClientMessage;
         if (msg.type === 'subscribe' && Array.isArray(msg.codes)) {
           client.codes = new Set(msg.codes.slice(0, 200).map(String));
+          syncWatch();
         }
       } catch {
         // 잘못된 메시지는 무시
       }
     });
-    socket.on('close', () => clients.delete(client));
+    socket.on('close', () => {
+      clients.delete(client);
+      syncWatch();
+    });
   });
 
   return app;

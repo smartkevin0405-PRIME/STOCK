@@ -1,8 +1,7 @@
 import { Card, Page, Segmented, Soon } from '../components/Layout';
 import { ChevronIcon } from '../components/Icons';
-import { api } from '../lib/api';
 import { useTheme, type ThemeSetting } from '../lib/theme';
-import { useAsync } from '../lib/useAsync';
+import { sourceName, useDataStatus } from '../lib/status';
 
 const MENU = [
   { label: '환전', milestone: 'M2' },
@@ -14,7 +13,7 @@ const MENU = [
 
 export function More() {
   const { setting, setSetting } = useTheme();
-  const health = useAsync(() => api.health(), []);
+  const dataStatus = useDataStatus();
 
   return (
     <Page title="더보기">
@@ -43,13 +42,16 @@ export function More() {
             onChange={setSetting}
           />
         </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-semibold">시세 소스</span>
-          <span className="text-sub">
-            {health.data?.provider === 'mock' ? '가짜 시세 (개발용)' : (health.data?.provider ?? '…')}
-          </span>
+        <div className="space-y-1.5 text-sm">
+          <p className="font-semibold">시세 소스</p>
+          {(['KR', 'US'] as const).map((m) => (
+            <div key={m} className="flex justify-between">
+              <span className="text-sub">{m === 'KR' ? '국내' : '미국'}</span>
+              <span>{dataStatus ? sourceName(dataStatus[m]) : '…'}</span>
+            </div>
+          ))}
         </div>
-        <p className="text-xs text-sub">야후 파이낸스 연결은 M1, 한국투자증권 API 키 연결은 선택 기능이에요.</p>
+        <p className="text-xs text-sub">국내는 네이버 실시간 시세를 쓰고, 막히면 야후(20분 지연)로 자동 전환돼요.</p>
       </Card>
 
       <p className="px-2 text-center text-xs text-sub">모의투자 앱이에요. 실제 돈이 오가지 않고, 투자 조언이 아니에요.</p>

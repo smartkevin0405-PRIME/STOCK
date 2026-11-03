@@ -83,6 +83,7 @@ export function StockDetail() {
           <p className="mt-2 text-[30px] font-bold">{stock.currency === 'KRW' ? `${formatPrice(quote.price, ccy)}원` : formatPrice(quote.price, ccy)}</p>
           <p className={`text-sm font-medium ${changeColor(quote.change)}`}>
             어제보다 {formatSigned(quote.change, ccy)} ({formatRate(quote.changeRate)})
+            {quote.delayMinutes ? <span className="ml-1.5 text-xs font-normal text-sub">· {quote.delayMinutes}분 지연 시세</span> : null}
           </p>
         </section>
 

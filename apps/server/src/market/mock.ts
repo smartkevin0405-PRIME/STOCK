@@ -1,5 +1,5 @@
 import { priceLimits, roundToTick } from '@stock/core';
-import type { Candle, CandleInterval, IndexQuote, Quote, StockInfo } from '@stock/shared';
+import type { Candle, CandleInterval, DataStatus, IndexQuote, Quote, StockInfo } from '@stock/shared';
 import { aggregateCandles, byMinutes, byMonth, byWeek } from './candles';
 import { MOCK_INDICES, MOCK_STOCKS } from './mockStocks';
 import type { MarketDataProvider } from './provider';
@@ -62,7 +62,6 @@ export interface MockProviderOptions {
 /** 가짜 시세: 종목별로 고정된 랜덤 히스토리 + 실시간 랜덤워크. 장 시간과 무관하게 24시간 움직임 */
 export class MockProvider implements MarketDataProvider {
   readonly name = 'mock';
-  readonly delayMinutes = 0;
 
   private readonly series = new Map<string, Series>();
   private readonly indices = new Map<string, IndexSeries>();
@@ -92,6 +91,14 @@ export class MockProvider implements MarketDataProvider {
     clearInterval(this.timer);
     this.timer = undefined;
   }
+
+  status(): DataStatus {
+    const s = { source: 'mock', delayMinutes: 0, ok: true };
+    return { provider: 'mock', KR: s, US: s };
+  }
+
+  /** 가짜 시세는 전 종목이 항상 움직여서 따로 할 일 없음 */
+  watch(): void {}
 
   async listStocks(): Promise<StockInfo[]> {
     return [...this.series.values()].map((s) => s.stock);
