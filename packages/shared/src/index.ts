@@ -45,6 +45,26 @@ export interface Quote {
   marketStatus?: 'open' | 'closed';
 }
 
+/** 호가 한 칸 */
+export interface OrderBookLevel {
+  price: number;
+  qty: number;
+}
+
+/** 10단계 호가창 (한투 키가 있을 때만) */
+export interface OrderBook {
+  code: string;
+  /** 매도호가: 1호가(가장 싼 것)부터 */
+  asks: OrderBookLevel[];
+  /** 매수호가: 1호가(가장 비싼 것)부터 */
+  bids: OrderBookLevel[];
+  totalAskQty: number;
+  totalBidQty: number;
+  /** epoch ms */
+  timestamp: number;
+  source: string;
+}
+
 export type CandleInterval = '1m' | '5m' | '15m' | '60m' | '1d' | '1w' | '1M';
 
 export interface Candle {

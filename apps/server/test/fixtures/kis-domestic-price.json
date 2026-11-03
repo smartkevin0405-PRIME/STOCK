@@ -1,0 +1,27 @@
+{
+  "_fixture": "예시 응답 (실제 호출 아님). 한투 공식 open-trading-api examples_llm/domestic_stock/inquire_price/chk_inquire_price.py의 필드 이름과 kis_auth.py의 공통 응답(rt_cd·msg_cd·msg1)으로 만듦. 값은 설명용",
+  "rt_cd": "0",
+  "msg_cd": "MCA00000",
+  "msg1": "정상처리 되었습니다.",
+  "output": {
+    "iscd_stat_cls_code": "55",
+    "rprs_mrkt_kor_name": "KOSPI200",
+    "temp_stop_yn": "N",
+    "stck_prpr": "70500",
+    "prdy_vrss": "-500",
+    "prdy_vrss_sign": "5",
+    "prdy_ctrt": "-0.70",
+    "acml_tr_pbmn": "870414000000",
+    "acml_vol": "12345678",
+    "prdy_vrss_vol_rate": "85.12",
+    "stck_oprc": "71000",
+    "stck_hgpr": "71200",
+    "stck_lwpr": "70300",
+    "stck_mxpr": "92300",
+    "stck_llam": "49700",
+    "stck_sdpr": "71000",
+    "aspr_unit": "100",
+    "per": "13.45",
+    "pbr": "1.21"
+  }
+}

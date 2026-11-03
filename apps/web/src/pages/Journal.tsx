@@ -1,6 +1,7 @@
 import type { JournalEntry, JournalNote, StockInfo } from '@stock/shared';
 import { currencyOf } from '@stock/shared';
 import { useState } from 'react';
+import { AskAi } from '../components/AskAi';
 import { CoachPanel } from '../components/CoachPanel';
 import { Card, Empty, Page, Segmented } from '../components/Layout';
 import { NoteEditor } from '../components/NoteEditor';
@@ -83,7 +84,7 @@ export function Journal() {
       />
       {tab === 'journal' && <JournalList />}
       {tab === 'stats' && <StatsPanel />}
-      {tab === 'coach' && <CoachPanel />}
+      {tab === 'coach' && <CoachPanel askAi={<AskAi />} />}
     </Page>
   );
 }

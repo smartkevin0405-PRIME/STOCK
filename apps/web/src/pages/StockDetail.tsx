@@ -7,6 +7,7 @@ import { AlertSheet } from '../components/AlertSheet';
 import { BackIcon, BellIcon, StarIcon } from '../components/Icons';
 import { Empty } from '../components/Layout';
 import { MyStock } from '../components/MyStock';
+import { OrderBook } from '../components/OrderBook';
 import { OrderSheet } from '../components/OrderSheet';
 import { StockLogo } from '../components/StockRow';
 import { api } from '../lib/api';
@@ -127,6 +128,9 @@ export function StockDetail() {
             ))}
           </dl>
         </section>
+
+        {/* 호가: 한투 키가 있어 서버가 호가를 줄 때만 보임 */}
+        <OrderBook code={stock.code} currency={ccy} prevClose={quote.prevClose} price={quote.price} />
 
         <MyStock stock={stock} quote={quote} />
       </main>

@@ -1,0 +1,11 @@
+{
+  "_fixture": "예시 응답 (실제 호출 아님). 한투 공식 open-trading-api examples_llm/overseas_stock/dailyprice/chk_dailyprice.py의 필드 이름으로 만듦. output2는 최신 날짜부터. 값은 설명용",
+  "rt_cd": "0",
+  "msg_cd": "MCA00000",
+  "msg1": "정상처리 되었습니다.",
+  "output1": { "rsym": "DNASAAPL", "zdiv": "4", "nrec": "2" },
+  "output2": [
+    { "xymd": "20261102", "clos": "203.5000", "sign": "2", "diff": "3.5000", "rate": "+1.75", "open": "201.0000", "high": "204.1000", "low": "200.5000", "tvol": "45000000", "tamt": "9157500000", "pbid": "203.4900", "vbid": "100", "pask": "203.5100", "vask": "200" },
+    { "xymd": "20261030", "clos": "200.0000", "sign": "5", "diff": "1.2000", "rate": "-0.60", "open": "201.5000", "high": "202.0000", "low": "199.1000", "tvol": "51000000", "tamt": "10200000000", "pbid": "199.9900", "vbid": "300", "pask": "200.0100", "vask": "100" }
+  ]
+}

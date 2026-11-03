@@ -1,0 +1,38 @@
+{
+  "_fixture": "예시 응답 (실제 호출 아님). 한투 공식 open-trading-api examples_llm/domestic_stock/inquire_asking_price_exp_ccn/chk_inquire_asking_price_exp_ccn.py의 필드 이름으로 만듦 (output1 호가, output2 예상체결). 값은 설명용",
+  "rt_cd": "0",
+  "msg_cd": "MCA00000",
+  "msg1": "정상처리 되었습니다.",
+  "output1": {
+    "aspr_acpt_hour": "100215",
+    "askp1": "70600", "askp2": "70700", "askp3": "70800", "askp4": "70900", "askp5": "71000",
+    "askp6": "71100", "askp7": "71200", "askp8": "71300", "askp9": "71400", "askp10": "71500",
+    "bidp1": "70500", "bidp2": "70400", "bidp3": "70300", "bidp4": "70200", "bidp5": "70100",
+    "bidp6": "70000", "bidp7": "69900", "bidp8": "69800", "bidp9": "69700", "bidp10": "69600",
+    "askp_rsqn1": "15234", "askp_rsqn2": "22011", "askp_rsqn3": "30120", "askp_rsqn4": "18000", "askp_rsqn5": "52000",
+    "askp_rsqn6": "12000", "askp_rsqn7": "9000", "askp_rsqn8": "8000", "askp_rsqn9": "7000", "askp_rsqn10": "6000",
+    "bidp_rsqn1": "40211", "bidp_rsqn2": "35000", "bidp_rsqn3": "28000", "bidp_rsqn4": "21000", "bidp_rsqn5": "19000",
+    "bidp_rsqn6": "60000", "bidp_rsqn7": "11000", "bidp_rsqn8": "10000", "bidp_rsqn9": "9000", "bidp_rsqn10": "8000",
+    "total_askp_rsqn": "179365",
+    "total_bidp_rsqn": "241211",
+    "total_askp_rsqn_icdc": "0",
+    "total_bidp_rsqn_icdc": "0",
+    "ntby_aspr_rsqn": "61846",
+    "new_mkop_cls_code": "20"
+  },
+  "output2": {
+    "antc_mkop_cls_code": "112",
+    "stck_prpr": "70500",
+    "stck_oprc": "71000",
+    "stck_hgpr": "71200",
+    "stck_lwpr": "70300",
+    "stck_sdpr": "71000",
+    "antc_cnpr": "0",
+    "antc_cntg_vrss_sign": "3",
+    "antc_cntg_vrss": "0",
+    "antc_cntg_prdy_ctrt": "0.00",
+    "antc_vol": "0",
+    "stck_shrn_iscd": "005930",
+    "vi_cls_code": "N"
+  }
+}
