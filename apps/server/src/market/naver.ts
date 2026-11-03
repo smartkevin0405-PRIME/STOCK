@@ -195,6 +195,19 @@ export class NaverSource implements QuoteSource {
     if (candles.length === 0) throw new Error('네이버 차트 데이터 없음');
     return candles.slice(-limit);
   }
+
+  /** 기간 지정 일봉 */
+  async fetchHistory(stock: StockInfo, from: number, to: number): Promise<Candle[]> {
+    const id = this.market === 'KR' ? stock.code : stock.naverCode;
+    if (!id) throw new UnsupportedError('네이버 종목코드 없음');
+    const kind = this.market === 'KR' ? 'domestic' : 'foreign';
+    const url = `https://api.stock.naver.com/chart/${kind}/item/${encodeURIComponent(id)}/day?startDateTime=${kstStamp(from)}&endDateTime=${kstStamp(to)}`;
+    const rows = await fetchJson<NaverCandle[]>(url, 15_000);
+    if (!Array.isArray(rows)) throw new Error('네이버 차트 형식이 바뀌었어요');
+    const candles = parseNaverCandles(rows);
+    if (candles.length === 0) throw new Error('네이버 일봉 데이터 없음');
+    return candles;
+  }
 }
 
 /** 한국시간 09:00 ≤ t < 15:30 */

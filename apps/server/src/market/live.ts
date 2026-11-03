@@ -11,6 +11,8 @@ export interface LiveProviderOptions {
   extras: MarketExtrasSource;
   /** 시장별 순위 (네이버) */
   rankings?: (type: RankingType, market: Market) => Promise<RankingItem[]>;
+  /** 지수 일봉 (야후) */
+  indexHistory?: (symbol: string, from: number, to: number) => Promise<Candle[]>;
   /** 화면에 보이는 종목 갱신 간격 */
   watchIntervalMs?: number;
   /** 지수·환율 갱신 간격 */
@@ -54,7 +56,8 @@ export class LiveProvider implements MarketDataProvider {
   private polling = false;
 
   private readonly rankingCache = new Map<string, Cached<RankingItem[]>>();
-  private readonly o: Required<Omit<LiveProviderOptions, 'directory' | 'sources' | 'extras' | 'rankings'>>;
+  private readonly o: Required<Omit<LiveProviderOptions, 'directory' | 'sources' | 'extras' | 'rankings' | 'indexHistory'>>;
+  private readonly history = new Map<string, Cached<Candle[]>>();
 
   constructor(private readonly opts: LiveProviderOptions) {
     this.o = {
@@ -137,6 +140,29 @@ export class LiveProvider implements MarketDataProvider {
       if (hit) return hit.value.slice(-limit);
       throw e;
     }
+  }
+
+  async getHistory(code: string, from: number, to: number): Promise<Candle[]> {
+    const stock = this.opts.directory.get(code);
+    if (!stock) return [];
+    return this.cachedHistory(`s:${code}:${from}:${to}`, () => this.opts.sources[stock.market].fetchHistory(stock, from, to));
+  }
+
+  async getIndexHistory(symbol: string, from: number, to: number): Promise<Candle[]> {
+    const fetchIndex = this.opts.indexHistory;
+    if (!fetchIndex) return [];
+    return this.cachedHistory(`i:${symbol}:${from}:${to}`, () => fetchIndex(symbol, from, to));
+  }
+
+  /** 과거 일봉은 잘 안 바뀌니 10분 캐시 (100개까지) */
+  private async cachedHistory(key: string, load: () => Promise<Candle[]>): Promise<Candle[]> {
+    const hit = this.history.get(key);
+    const now = this.o.now();
+    if (hit && now - hit.at < 600_000) return hit.value;
+    const value = await load();
+    if (this.history.size > 100) this.history.delete(this.history.keys().next().value!);
+    this.history.set(key, { value, at: now });
+    return value;
   }
 
   async getRankings(type: RankingType, market?: Market): Promise<RankingItem[]> {

@@ -133,6 +133,20 @@ export class YahooSource implements QuoteSource {
     if (candles.length === 0) throw new Error('야후 차트 데이터 없음');
     return candles.slice(-limit);
   }
+
+  fetchHistory(stock: StockInfo, from: number, to: number): Promise<Candle[]> {
+    return fetchYahooDaily(yahooSymbol(stock), from, to);
+  }
+}
+
+/** 기간 지정 일봉 (from·to: epoch ms). 지수(^KS11 등)도 가능 */
+export async function fetchYahooDaily(symbol: string, from: number, to: number): Promise<Candle[]> {
+  const p1 = Math.floor(from / 1000);
+  const p2 = Math.floor(to / 1000);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&period1=${p1}&period2=${p2}`;
+  const candles = parseYahooChart(await fetchJson<ChartResponse>(url, 15_000), true);
+  if (candles.length === 0) throw new Error('야후 일봉 데이터 없음');
+  return candles;
 }
 
 export const YAHOO_INDICES = [

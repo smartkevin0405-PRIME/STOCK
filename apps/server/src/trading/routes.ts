@@ -2,6 +2,7 @@ import type { Currency, JournalNote, OrderSide, OrderType, StockInfo } from '@st
 import type { MarketDataProvider } from '../market/provider';
 import type { FastifyInstance } from 'fastify';
 import { TradingError, type TradingService } from './service';
+import { StatsService } from './stats';
 import type { WatchlistService } from './watchlist';
 
 const isSide = (v: unknown): v is OrderSide => v === 'buy' || v === 'sell';
@@ -45,6 +46,38 @@ export function registerTradingRoutes(
   app.post('/api/account/reset', async () => trading.reset());
 
   app.get('/api/seasons', async () => ({ seasons: trading.seasons() }));
+
+  // ── 통계·코치·설정 ──
+  const stats = new StatsService(trading, provider);
+
+  app.get<{ Querystring: { period?: string } }>('/api/stats', async (req) => {
+    const period = (['all', 'month', 'week'] as const).find((p) => p === req.query.period) ?? 'all';
+    return stats.stats(period);
+  });
+
+  app.get<{ Querystring: { from?: string } }>('/api/benchmarks', async (req) => {
+    const from = Number(req.query.from);
+    if (!Number.isFinite(from) || from <= 0) throw new TradingError('BAD_REQUEST', '시작 날짜가 필요해요');
+    return { series: await stats.benchmarks(from) };
+  });
+
+  app.get('/api/coach', async () => stats.coach());
+
+  app.get('/api/settings', async () => {
+    const stopLoss = trading.repo.getSetting('stopLossRate');
+    return { stopLossRate: stopLoss !== undefined ? Number(stopLoss) : null };
+  });
+
+  app.put<{ Body: { stopLossRate?: unknown } }>('/api/settings', async (req) => {
+    const v = req.body?.stopLossRate;
+    if (v === null) trading.repo.setSetting('stopLossRate', undefined);
+    else if (typeof v === 'number') {
+      if (!(v < 0 && v > -1)) throw new TradingError('BAD_REQUEST', '손절 기준은 -1% ~ -99% 사이로 정해주세요');
+      trading.repo.setSetting('stopLossRate', String(v));
+    }
+    const stopLoss = trading.repo.getSetting('stopLossRate');
+    return { stopLossRate: stopLoss !== undefined ? Number(stopLoss) : null };
+  });
 
   app.get<{ Querystring: { limit?: string } }>('/api/snapshots', async (req) => ({
     snapshots: trading.snapshots(Math.min(Number(req.query.limit) || 400, 2_000)),

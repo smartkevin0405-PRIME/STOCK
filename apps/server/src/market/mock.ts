@@ -154,6 +154,21 @@ export class MockProvider implements MarketDataProvider {
     return this.indices.get('KRW=X')?.price ?? 1_400;
   }
 
+  /** 가짜 과거 일봉: 종목·시작일로 고정된 랜덤워크 (같은 요청엔 항상 같은 결과) */
+  async getHistory(code: string, from: number, to: number): Promise<Candle[]> {
+    const s = this.series.get(code);
+    if (!s) return [];
+    return syntheticDaily(`${code}:${from}`, s.prevClose, s.volatility, from, to, (p) =>
+      roundToTick(s.stock.market, Math.max(p, s.stock.market === 'US' ? 0.01 : 1), 'nearest'),
+    );
+  }
+
+  async getIndexHistory(symbol: string, from: number, to: number): Promise<Candle[]> {
+    const idx = this.indices.get(symbol);
+    if (!idx) return [];
+    return syntheticDaily(`${symbol}:${from}`, idx.prevClose, idx.volatility, from, to, round2);
+  }
+
   onQuote(listener: (q: Quote) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -287,4 +302,27 @@ export class MockProvider implements MarketDataProvider {
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/** 평일만, base 근처에서 시작하는 랜덤워크 일봉 */
+function syntheticDaily(seed: string, base: number, volatility: number, from: number, to: number, round: (p: number) => number): Candle[] {
+  const rng = mulberry32(seedOf(seed));
+  const out: Candle[] = [];
+  let price = base * (0.7 + rng() * 0.6);
+  for (let t = Math.floor(from / 86_400_000) * 86_400; t * 1000 <= to; t += 86_400) {
+    const dow = new Date(t * 1000).getUTCDay();
+    if (dow === 0 || dow === 6) continue;
+    const open = round(price * (1 + gauss(rng) * volatility * 0.3));
+    price = price * (1 + gauss(rng) * volatility);
+    const close = round(price);
+    out.push({
+      time: t,
+      open,
+      high: round(Math.max(open, close) * (1 + Math.abs(gauss(rng)) * volatility * 0.4)),
+      low: round(Math.min(open, close) * (1 - Math.abs(gauss(rng)) * volatility * 0.4)),
+      close,
+      volume: Math.floor((0.5 + rng()) * 1_000_000),
+    });
+  }
+  return out;
 }

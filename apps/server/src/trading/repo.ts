@@ -68,6 +68,7 @@ function toFill(r: Row): Fill {
     currency: r.currency as Currency,
     realizedPnl: r.realized_pnl as number,
     executedAt: r.executed_at as number,
+    ...(r.day_change_rate != null ? { dayChangeRate: r.day_change_rate as number } : {}),
   };
 }
 
@@ -180,10 +181,10 @@ export class TradingRepo {
   insertFill(accountId: number, f: Fill): Fill {
     const res = this.db
       .prepare(
-        `INSERT INTO fills (order_id, account_id, code, side, price, qty, amount, commission, tax, currency, realized_pnl, executed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO fills (order_id, account_id, code, side, price, qty, amount, commission, tax, currency, realized_pnl, executed_at, day_change_rate)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(f.orderId, accountId, f.code, f.side, f.price, f.qty, f.amount, f.commission, f.tax, f.currency, f.realizedPnl ?? 0, f.executedAt);
+      .run(f.orderId, accountId, f.code, f.side, f.price, f.qty, f.amount, f.commission, f.tax, f.currency, f.realizedPnl ?? 0, f.executedAt, f.dayChangeRate ?? null);
     return { ...f, id: Number(res.lastInsertRowid) };
   }
 
@@ -192,6 +193,41 @@ export class TradingRepo {
       ? this.db.prepare('SELECT * FROM fills WHERE account_id = ? AND code = ? ORDER BY executed_at DESC, id DESC LIMIT ?').all(accountId, code, limit)
       : this.db.prepare('SELECT * FROM fills WHERE account_id = ? ORDER BY executed_at DESC, id DESC LIMIT ?').all(accountId, limit);
     return (rows as Row[]).map(toFill);
+  }
+
+  /** 통계·코치용: 이번 시즌 전체 체결 (오래된 것부터) */
+  allFills(accountId: number): Fill[] {
+    return (this.db.prepare('SELECT * FROM fills WHERE account_id = ? ORDER BY executed_at, id').all(accountId) as Row[]).map(toFill);
+  }
+
+  /** 달러를 원화 얼마에 샀는지 (평균). 달러를 팔면 같은 비율로 줄임. 환전 안 했으면 undefined */
+  avgUsdRate(accountId: number): number | undefined {
+    let usd = 0;
+    let krw = 0;
+    for (const t of this.fxTrades(accountId, 100_000).reverse()) {
+      if (t.from === 'KRW') {
+        usd += t.receive;
+        krw += t.pay;
+      } else if (usd > 0) {
+        const left = Math.max(0, usd - t.pay) / usd;
+        usd *= left;
+        krw *= left;
+      }
+    }
+    return usd > 0 ? krw / usd : undefined;
+  }
+
+  getSetting(key: string, userId = 1): string | undefined {
+    const r = this.db.prepare('SELECT value FROM settings WHERE user_id = ? AND key = ?').get(userId, key) as { value: string } | undefined;
+    return r?.value;
+  }
+
+  setSetting(key: string, value: string | undefined, userId = 1): void {
+    if (value === undefined) this.db.prepare('DELETE FROM settings WHERE user_id = ? AND key = ?').run(userId, key);
+    else
+      this.db
+        .prepare('INSERT INTO settings (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value')
+        .run(userId, key, value);
   }
 
   fillCount(accountId: number): number {

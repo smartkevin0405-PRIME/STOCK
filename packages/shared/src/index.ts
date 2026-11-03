@@ -112,6 +112,8 @@ export interface Fill {
   executedAt: number;
   /** 매도 실현손익 (수수료·세금 차감 후, 해당 통화) */
   realizedPnl?: number;
+  /** 체결 시점의 당일 등락률 (전일 대비, 0.05 = +5%) */
+  dayChangeRate?: number;
 }
 
 export interface Position {
@@ -152,6 +154,8 @@ export interface AccountView {
   openOrders: number;
   /** 오늘(한국시간 오전 7시 기준) 시작 총자산 → '오늘 수익' 계산용 */
   dayBase?: { day: string; totalKrw: number };
+  /** 달러를 평균 얼마에 샀는지 (원/달러) → 환율 변동 손익 계산용 */
+  avgUsdRate?: number;
 }
 
 /** 가격 알림 조건: 이상·이하는 가격, 상승·하락은 전일 대비 % */

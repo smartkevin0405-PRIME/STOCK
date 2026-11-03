@@ -131,6 +131,16 @@ const MIGRATIONS: string[] = [
     created_at INTEGER NOT NULL
   );
   `,
+  // v6: 체결 당시 당일 등락률 (코치의 추격매수 판단용) + 설정
+  `
+  ALTER TABLE fills ADD COLUMN day_change_rate REAL;
+  CREATE TABLE settings (
+    user_id INTEGER NOT NULL DEFAULT 1,
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    PRIMARY KEY (user_id, key)
+  );
+  `,
 ];
 
 /** DB 열기 + 스키마 맞추기. ':memory:'는 테스트용 */

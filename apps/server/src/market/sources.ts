@@ -8,6 +8,8 @@ export interface QuoteSource {
   /** 여러 종목 현재가. 못 찾은 종목은 빠질 수 있음 */
   fetchQuotes(stocks: StockInfo[]): Promise<Quote[]>;
   fetchCandles(stock: StockInfo, interval: CandleInterval, limit: number): Promise<Candle[]>;
+  /** 기간 지정 일봉 (리플레이용, 없어도 됨) */
+  fetchHistory?(stock: StockInfo, from: number, to: number): Promise<Candle[]>;
 }
 
 /** 지수·환율 소스 */
@@ -114,6 +116,22 @@ export class FallbackSource implements QuoteSource {
       }
     }
     throw new AggregateError(errors, `차트를 불러오지 못했어요 (${this.name})`);
+  }
+
+  async fetchHistory(stock: StockInfo, from: number, to: number): Promise<Candle[]> {
+    const errors: unknown[] = [];
+    for (const s of this.candidates('candles')) {
+      if (!s.fetchHistory) continue;
+      try {
+        const candles = await s.fetchHistory(stock, from, to);
+        this.markOk(s, 'candles');
+        return candles;
+      } catch (e) {
+        errors.push(e);
+        if (!(e instanceof UnsupportedError)) this.markFail(s, 'candles');
+      }
+    }
+    throw new AggregateError(errors, `과거 시세를 불러오지 못했어요 (${this.name})`);
   }
 
   private key(s: QuoteSource, op: Op): string {

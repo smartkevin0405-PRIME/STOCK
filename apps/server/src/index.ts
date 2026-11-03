@@ -14,7 +14,7 @@ import { PushService, loadVapidKeys } from './trading/push';
 import { TradingService } from './trading/service';
 import { WatchlistService } from './trading/watchlist';
 import { FallbackSource } from './market/sources';
-import { YahooSource } from './market/yahoo';
+import { YahooSource, fetchYahooDaily } from './market/yahoo';
 
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? '0.0.0.0';
@@ -46,6 +46,7 @@ if (mode === 'mock') {
     },
     extras: new LiveExtras(),
     rankings: (type, market) => fetchNaverRankings(type, market),
+    indexHistory: fetchYahooDaily,
   });
 }
 

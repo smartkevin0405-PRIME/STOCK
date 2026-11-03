@@ -45,6 +45,12 @@ class TestProvider implements MarketDataProvider {
   async getIndices() {
     return [];
   }
+  async getHistory() {
+    return [];
+  }
+  async getIndexHistory() {
+    return [];
+  }
   async getRankings() {
     return [];
   }

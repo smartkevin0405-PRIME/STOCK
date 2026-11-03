@@ -173,6 +173,10 @@ export class TradingService {
       realizedPnl: this.repo.realizedPnl(acc.id),
       openOrders: this.repo.openOrders(acc.id).length,
       ...(() => {
+        const rate = this.repo.avgUsdRate(acc.id);
+        return rate ? { avgUsdRate: rate } : {};
+      })(),
+      ...(() => {
         const base = this.repo.snapshot(acc.id, dayKey(this.now()));
         return base ? { dayBase: { day: base.day, totalKrw: base.totalKrw } } : {};
       })(),
@@ -397,6 +401,11 @@ export class TradingService {
   // ── 내부 ──────────────────────────────────────────────
 
   /** 지금 시세로 계좌 평가 (원화 환산) */
+  /** 지금 시즌 계좌를 지금 시세로 평가 */
+  currentValue() {
+    return this.valueOf(this.account());
+  }
+
   private async valueOf(acc: AccountRow) {
     const positions = this.repo.positions(acc.id);
     const codes = Object.keys(positions);
@@ -452,7 +461,7 @@ export class TradingService {
       this.repo.setCash(acc.id, next.cash);
       this.repo.setPosition(acc.id, fill.code, next.positions[fill.code]);
       this.repo.updateOrder(order.id, { status: 'filled' }, this.now());
-      return { fill: this.repo.insertFill(acc.id, { ...fill, realizedPnl: next.realizedPnl }) };
+      return { fill: this.repo.insertFill(acc.id, { ...fill, realizedPnl: next.realizedPnl, dayChangeRate: quote.changeRate }) };
     });
     if (!result) return null;
     if ('rejected' in result) {

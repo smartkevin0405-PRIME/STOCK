@@ -19,6 +19,10 @@ export interface MarketDataProvider {
   getRankings(type: RankingType, market?: Market): Promise<RankingItem[]>;
   /** 원/달러 기준환율 */
   getUsdKrw(): Promise<number>;
+  /** 기간 지정 일봉 (리플레이·비교 차트용). from·to: epoch ms */
+  getHistory(code: string, from: number, to: number): Promise<Candle[]>;
+  /** 지수 일봉 (^KS11 코스피, ^GSPC S&P500 등) */
+  getIndexHistory(symbol: string, from: number, to: number): Promise<Candle[]>;
   /** 자주 갱신할 종목. owner별로 따로 등록 (예: 'screens' 화면에 보이는 종목, 'orders' 미체결 주문) */
   watch(owner: string, codes: Iterable<string>): void;
   /** 시세가 바뀔 때마다 호출. 반환값은 구독 해제 함수 */
