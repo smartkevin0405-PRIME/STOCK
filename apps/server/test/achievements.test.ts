@@ -271,3 +271,49 @@ describe('리플레이 업적', () => {
     expect(ids()).toEqual(expect.arrayContaining(['covidSurvivor', 'replayPro']));
   });
 });
+
+describe('달성 시각 = 실제 기록 시각', () => {
+  it('나중에 확인해도 첫 매수 시각으로 기록, 예전에 늦게 찍힌 시각도 고침', async () => {
+    const { ach, buy, setNow, db } = setup();
+    await buy(1); // KR_OPEN에 매수
+    setNow(KR_OPEN + 5 * 86_400_000);
+    await ach.check({ silent: true });
+    const at = () => (db.prepare("SELECT unlocked_at AS t FROM achievements WHERE achievement_id = 'firstBuy'").get() as { t: number }).t;
+    expect(at()).toBe(KR_OPEN);
+
+    db.prepare("UPDATE achievements SET unlocked_at = ? WHERE achievement_id = 'firstBuy'").run(KR_OPEN + 9e9);
+    await ach.check();
+    expect(at()).toBe(KR_OPEN);
+  });
+});
+
+describe('지난달 MDD 챌린지', () => {
+  const DAY = 86_400_000;
+  // 10월 1일 오전 7시 KST부터 하루 기록을 넣고, 11월 2일에 확인
+  const octStart = Date.parse('2026-09-30T22:00:00Z');
+  const fill = (db: ReturnType<typeof setup>['db'], values: number[]) => {
+    values.forEach((v, i) => {
+      const day = new Date(octStart + i * DAY + 2 * 3_600_000).toISOString().slice(0, 10);
+      db.prepare('INSERT OR REPLACE INTO daily_snapshots (account_id, day, total_krw, stock_krw, cash_krw, cash_usd, usd_krw, created_at) VALUES (1, ?, ?, 0, ?, 0, 1400, ?)').run(day, v, v, octStart + i * DAY);
+    });
+  };
+
+  it('지난달 내내 -10% 안이면 이번 달 1일 기준으로 달성', async () => {
+    const { ach, ids, unlocked, setNow, db, trading } = setup(octStart);
+    trading.account();
+    fill(db, Array.from({ length: 32 }, (_, i) => 10_000_000 * (1 - (i % 7) * 0.01))); // 최대 -6%
+    setNow(Date.parse('2026-11-02T03:00:00Z'));
+    await ach.check();
+    expect(ids()).toContain('challenge:mdd10:2026-10');
+    expect(unlocked.find((u) => u.id === 'challenge:mdd10:2026-10')?.unlockedAt).toBe(Date.parse('2026-10-31T15:00:00Z'));
+  });
+
+  it('-10%를 넘게 빠졌으면 달성 아님', async () => {
+    const { ach, ids, setNow, db, trading } = setup(octStart);
+    trading.account();
+    fill(db, Array.from({ length: 32 }, (_, i) => (i === 15 ? 8_500_000 : 10_000_000)));
+    setNow(Date.parse('2026-11-02T03:00:00Z'));
+    await ach.check();
+    expect(ids()).not.toContain('challenge:mdd10:2026-10');
+  });
+});

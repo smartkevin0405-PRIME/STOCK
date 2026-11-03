@@ -212,18 +212,34 @@ export class AchievementService {
 
     const unlocked: AchievementUnlock[] = [];
     const rows = this.rows();
-    const unlock = (kind: AchievementUnlock['kind'], id: string, icon: string, title: string) => {
-      if (rows.has(id) || !this.insert(id, now)) return;
-      rows.set(id, now);
-      unlocked.push({ kind, id, icon, title, unlockedAt: now });
+    /** at: 실제로 달성한 시각 (기록에서 찾으면 그 시각, 못 찾으면 지금) */
+    const unlock = (kind: AchievementUnlock['kind'], id: string, icon: string, title: string, at = now) => {
+      const when = Math.min(at, now);
+      const stored = rows.get(id);
+      if (stored !== undefined) {
+        // 예전에 '확인한 시각'으로 저장된 건 기록상 더 이른 실제 시각으로 고침
+        if (when < stored) this.setTime(id, when);
+        return;
+      }
+      if (!this.insert(id, when)) return;
+      rows.set(id, when);
+      unlocked.push({ kind, id, icon, title, unlockedAt: when });
     };
 
     if (current !== undefined && acc.seedKrw > 0) facts.bestSeasonReturn = Math.max(facts.bestSeasonReturn, current / acc.seedKrw - 1);
-    for (const d of ACHIEVEMENTS) if (d.done(facts)) unlock('achievement', d.id, d.icon, d.title);
+    const times = this.unlockTimes(facts);
+    for (const d of ACHIEVEMENTS) if (d.done(facts)) unlock('achievement', d.id, d.icon, d.title, times[d.id]);
 
     const challenges = this.challenges({ facts, range, now, monthSnaps, monthNotes, current, recorded: rows });
     for (const c of challenges) {
       if (c.status === 'done') unlock('challenge', challengeKey(c.id as ChallengeId, range.month), c.icon, c.title);
+    }
+
+    // 지난달 MDD 챌린지: 한 달이 다 끝나야 판단 가능 → 이번 달이 되면 지난달 결과로 달성 처리
+    const last = this.lastMonthMdd(acc.id, range);
+    if (last && last.mdd >= MDD_LIMIT - 1e-12) {
+      const c = CHALLENGES.mdd10;
+      unlock('challenge', challengeKey('mdd10', last.month), c.icon, `${c.title} (${Number(last.month.slice(5))}월)`, range.start);
     }
 
     if (!silent) for (const u of unlocked) this.emit(u);
@@ -271,7 +287,7 @@ export class AchievementService {
       ...(facts.stopLossRate === undefined && !stopDone ? { hint: '손절 기준을 정하면 시작돼요' } : {}),
     };
 
-    // MDD: 이번 달 하루 기록 + 지금. 한 달이 끝나야 달성이라 이번 달 안에서는 진행 중/실패만
+    // MDD: 이번 달 하루 기록 + 지금. 달이 끝나야 달성 → 이번 달 안에서는 진행 중/실패만 (달성은 다음 달 1일에 처리)
     const points = [...monthSnaps.map((s, i) => ({ time: i, value: s.totalKrw }))];
     if (current !== undefined) points.push({ time: points.length, value: current });
     const mdd = calcMaxDrawdown(points)?.mdd ?? 0;
@@ -283,6 +299,7 @@ export class AchievementService {
       target: MDD_LIMIT,
       progress: failed ? 0 : clamp01((now - range.start) / (range.end - range.start)),
       status: failed ? 'failed' : 'active',
+      ...(failed ? {} : { hint: '이달 마지막 날까지 -10% 안으로 버티면 다음 달 1일에 달성돼요' }),
     };
 
     const journalDone = isRecorded('journal10') || x.monthNotes >= JOURNAL_TARGET;
@@ -366,6 +383,74 @@ export class AchievementService {
   private rows(): Map<string, number> {
     const rows = this.db.prepare('SELECT achievement_id, unlocked_at FROM achievements WHERE user_id = ?').all(this.userId) as Row[];
     return new Map(rows.map((r) => [r.achievement_id as string, r.unlocked_at as number]));
+  }
+
+  private setTime(id: string, at: number): void {
+    this.db.prepare('UPDATE achievements SET unlocked_at = ? WHERE user_id = ? AND achievement_id = ?').run(at, this.userId, id);
+  }
+
+  /**
+   * 지난달 MDD (이번 시즌 계좌가 지난달 내내 있었을 때만).
+   * 지난달 하루 기록들 + 이번 달 첫 기록(= 지난달 마지막 날 마감 뒤 값)
+   */
+  private lastMonthMdd(accountId: number, range: { month: string; start: number }): { month: string; mdd: number } | null {
+    const prev = monthRange(range.start - 1);
+    const snaps = this.trading.repo.snapshots(accountId);
+    const inPrev = snaps.filter((s) => s.day.slice(0, 7) === prev.month);
+    const afterPrev = snaps.find((s) => s.day.slice(0, 7) === range.month);
+    // 지난달 초(3일 안)부터 기록이 있어야 '한 달 버티기'로 인정
+    if (inPrev.length === 0 || Number(inPrev[0]!.day.slice(8)) > 3 || !afterPrev) return null;
+    const points = [...inPrev, afterPrev].map((s, i) => ({ time: i, value: s.totalKrw }));
+    return { month: prev.month, mdd: calcMaxDrawdown(points)?.mdd ?? 0 };
+  }
+
+  /** 업적별 실제 달성 시각 (기록에서 찾을 수 있는 것만) */
+  private unlockTimes(f: Facts): Record<string, number | undefined> {
+    const u = this.userId;
+    const one = (sql: string, ...params: (string | number)[]) =>
+      ((this.db.prepare(sql).get(u, ...params) as { t: number | null } | undefined)?.t ?? undefined) as number | undefined;
+    const fillAt = (where: string) =>
+      one(`SELECT MIN(f.executed_at) AS t FROM fills f JOIN accounts a ON a.id = f.account_id WHERE a.user_id = ? AND ${where}`);
+
+    // 연승은 기준 횟수를 채운 그 판매 시각
+    const streakAt = (n: number) => {
+      let s = 0;
+      for (const t of f.trades) {
+        s = t.pnl > 0 ? s + 1 : 0;
+        if (s >= n) return t.closedAt;
+      }
+      return undefined;
+    };
+    const stopAt = f.stopLossRate === undefined ? undefined : f.trades.find((t) => keptStopLoss(t.priceRate, f.stopLossRate!))?.closedAt;
+
+    return {
+      firstBuy: fillAt("f.side = 'buy'"),
+      firstProfit: f.trades.find((t) => t.pnl > 0)?.closedAt,
+      winStreak3: streakAt(3),
+      winStreak10: streakAt(10),
+      usDebut: fillAt("f.side = 'buy' AND f.currency = 'USD'"),
+      firstFx: one('SELECT MIN(t.executed_at) AS t FROM fx_trades t JOIN accounts a ON a.id = t.account_id WHERE a.user_id = ?'),
+      journal10: one(
+        `SELECT j.created_at AS t FROM journal_notes j JOIN accounts a ON a.id = j.account_id
+         WHERE a.user_id = ? AND (j.text <> '' OR j.tags <> '[]') ORDER BY j.created_at LIMIT 1 OFFSET 9`,
+      ),
+      stopLossKept: stopAt,
+      seasonReturn10: one(
+        `SELECT MIN(t) AS t FROM (
+           SELECT closed_at AS t FROM accounts WHERE user_id = ?1 AND closed_at IS NOT NULL AND seed_krw > 0 AND final_value_krw >= seed_krw * 1.1
+           UNION ALL
+           SELECT s.created_at AS t FROM daily_snapshots s JOIN accounts a ON a.id = s.account_id WHERE a.user_id = ?1 AND a.seed_krw > 0 AND s.total_krw >= a.seed_krw * 1.1
+         )`,
+      ),
+      firstSeasonEnd: one('SELECT MIN(closed_at) AS t FROM accounts WHERE user_id = ?'),
+      firstAlert: one('SELECT MIN(created_at) AS t FROM alerts WHERE user_id = ?'),
+      watchGroup:
+        one('SELECT MIN(created_at) AS t FROM watch_groups WHERE user_id = ? AND name <> ?', DEFAULT_GROUP) ??
+        one('SELECT created_at AS t FROM watch_groups WHERE user_id = ? ORDER BY created_at LIMIT 1 OFFSET 1'),
+      replayFirst: one('SELECT MIN(finished_at) AS t FROM replay_results WHERE user_id = ?'),
+      covidSurvivor: one("SELECT MIN(finished_at) AS t FROM replay_results WHERE user_id = ? AND scenario_id LIKE 'covid-2020-%' AND return_rate >= 0"),
+      replayPro: one('SELECT MIN(finished_at) AS t FROM replay_results WHERE user_id = ? AND return_rate >= 0.2'),
+    };
   }
 
   private insert(id: string, at: number): boolean {
