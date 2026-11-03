@@ -2,9 +2,11 @@ import websocket from '@fastify/websocket';
 import { getMarketStatus, searchStocks } from '@stock/core';
 import type { CandleInterval, ClientMessage, Quote, ServerMessage } from '@stock/shared';
 import Fastify from 'fastify';
+import { registerCors } from './cors';
 import type { MarketDataProvider } from './market/provider';
 import { registerAlertRoutes, startNotifier } from './trading/alertRoutes';
 import type { AlertService } from './trading/alerts';
+import { registerFcmRoutes } from './trading/fcmRoutes';
 import type { PushService } from './trading/push';
 import { registerTradingRoutes } from './trading/routes';
 import type { TradingService } from './trading/service';
@@ -28,9 +30,11 @@ export interface AppOptions {
 
 export async function buildApp({ provider, trading, watchlists, alerts, push, logger = false, indicesIntervalMs = 3_000 }: AppOptions) {
   const app = Fastify({ logger });
+  registerCors(app);
   await app.register(websocket);
   if (trading) registerTradingRoutes(app, trading, provider, watchlists);
   if (alerts) registerAlertRoutes(app, { provider, alerts, push });
+  registerFcmRoutes(app, push);
 
   const withQuotes = async (codes: string[]) => {
     const quotes = await provider.getQuotes(codes);

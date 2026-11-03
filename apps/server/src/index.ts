@@ -10,6 +10,7 @@ import { NaverSource, fetchNaverDirectory, fetchNaverRankings } from './market/n
 import type { MarketDataProvider } from './market/provider';
 import { openDb } from './trading/db';
 import { AlertService } from './trading/alerts';
+import { fcmFromEnv } from './trading/fcm';
 import { PushService, loadVapidKeys } from './trading/push';
 import { TradingService } from './trading/service';
 import { WatchlistService } from './trading/watchlist';
@@ -58,6 +59,8 @@ trading.start();
 const vapid = loadVapidKeys(join(dataDir, 'vapid.json'));
 // 푸시 서비스가 문제 있을 때 연락할 주소 (배포할 때 본인 주소로 바꾸기)
 const push = new PushService(db, vapid.publicKey, PushService.webPushSender(vapid, process.env.VAPID_SUBJECT ?? 'mailto:admin@example.com'));
+// 안드로이드 앱 푸시: FIREBASE_SERVICE_ACCOUNT = 서비스 계정 JSON 파일 경로 (없으면 꺼짐)
+push.fcm = fcmFromEnv(db);
 const app = await buildApp({ provider, trading, watchlists: new WatchlistService(db), alerts: new AlertService(db), push, logger: true });
 await app.listen({ port, host });
 
