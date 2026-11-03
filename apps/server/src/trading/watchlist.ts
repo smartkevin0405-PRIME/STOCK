@@ -1,6 +1,6 @@
 import type { WatchGroup } from '@stock/shared';
 import type { DatabaseSync } from 'node:sqlite';
-import { transaction } from './db';
+import { transaction } from './schema';
 import { TradingError } from './service';
 
 const DEFAULT_NAME = '관심 종목';

@@ -3,7 +3,7 @@ import type { Fill, StockInfo } from '@stock/shared';
 import { fetchJson } from '../market/http';
 import type { MarketDataProvider } from '../market/provider';
 import { yahooSymbol } from '../market/yahoo';
-import { transaction } from './db';
+import { transaction } from './schema';
 import type { TradingService } from './service';
 
 /** 배당·액면분할 (date = 배당락일·분할 기준일, epoch ms) */
