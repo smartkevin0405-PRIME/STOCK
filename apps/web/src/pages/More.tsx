@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 import { Card, Page, Segmented, Soon } from '../components/Layout';
 import { ChevronIcon } from '../components/Icons';
+import { isNative } from '../lib/server';
 import { useTheme, type ThemeSetting } from '../lib/theme';
 import { sourceName, useDataStatus } from '../lib/status';
 
@@ -11,6 +12,8 @@ const MENU: { label: string; to?: string; milestone?: string }[] = [
   { label: '가격 알림 · 폰 알림', to: '/alerts' },
   { label: '챌린지 · 업적', to: '/achievements' },
   { label: '타임머신 리플레이', to: '/replay' },
+  // 안드로이드 앱에서만: 연결할 서버 바꾸기
+  ...(isNative() ? [{ label: '서버 주소', to: '/server' }] : []),
 ];
 
 export function More() {

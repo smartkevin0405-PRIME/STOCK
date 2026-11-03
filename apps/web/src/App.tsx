@@ -5,8 +5,10 @@ import { Toaster } from './components/Toaster';
 import { handleAchievement } from './lib/achievements';
 import { describeAlert } from './lib/alerts';
 import { live } from './lib/live';
+import { initNative } from './lib/native';
 import { handleAccountEvent } from './lib/notify';
 import { registerServiceWorker } from './lib/push';
+import { needsServerSetup } from './lib/server';
 import { useTheme } from './lib/theme';
 import { toast } from './lib/toast';
 import { Achievements } from './pages/Achievements';
@@ -20,10 +22,11 @@ import { Orders } from './pages/Orders';
 import { Replay } from './pages/Replay';
 import { ReplayPlay } from './pages/ReplayPlay';
 import { Seasons } from './pages/Seasons';
+import { ServerSetup, ServerSetupFirst } from './pages/ServerSetup';
 import { StockDetail } from './pages/StockDetail';
 import { Watchlist } from './pages/Watchlist';
 
-const SUB_PAGES = ['/stock/', '/orders', '/fx', '/seasons', '/alerts', '/achievements', '/replay'];
+const SUB_PAGES = ['/stock/', '/orders', '/fx', '/seasons', '/alerts', '/achievements', '/replay', '/server'];
 
 function Shell() {
   useTheme();
@@ -36,6 +39,7 @@ function Shell() {
     live.onAchievement(handleAchievement);
     live.connect();
     registerServiceWorker();
+    void initNative();
   }, []);
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -57,6 +61,7 @@ function Shell() {
         <Route path="/achievements" element={<Achievements />} />
         <Route path="/replay" element={<Replay />} />
         <Route path="/replay/:id" element={<ReplayPlay />} />
+        <Route path="/server" element={<ServerSetup />} />
       </Routes>
       {showTabs && <TabBar />}
       <Toaster />
@@ -66,6 +71,8 @@ function Shell() {
 
 // HashRouter: 나중에 Capacitor(APK)에서도 주소 처리 없이 그대로 동작
 export function App() {
+  // 안드로이드 앱에서 서버 주소를 아직 안 정했으면 그것부터
+  if (needsServerSetup()) return <ServerSetupFirst />;
   return (
     <HashRouter>
       <Shell />

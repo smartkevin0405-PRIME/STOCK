@@ -177,6 +177,15 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX replay_results_by_time ON replay_results(user_id, finished_at);
   `,
+  // v10: FCM 토큰 (안드로이드 앱 푸시)
+  `
+  CREATE TABLE fcm_tokens (
+    token TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  `,
 ];
 
 /** DB 열기 + 스키마 맞추기. ':memory:'는 테스트용 */

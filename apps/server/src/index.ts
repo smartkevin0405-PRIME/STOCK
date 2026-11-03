@@ -13,6 +13,7 @@ import { ReplayStore } from './replay/store';
 import { openDb } from './trading/db';
 import { AlertService } from './trading/alerts';
 import { CorporateActions, fetchYahooEvents } from './trading/corporate';
+import { fcmFromEnv } from './trading/fcm';
 import { PushService, loadVapidKeys } from './trading/push';
 import { TradingService } from './trading/service';
 import { WatchlistService } from './trading/watchlist';
@@ -76,6 +77,8 @@ const corporateTimer = setInterval(runCorporate, 6 * 3_600_000);
 const vapid = loadVapidKeys(join(dataDir, 'vapid.json'));
 // 푸시 서비스가 문제 있을 때 연락할 주소 (배포할 때 본인 주소로 바꾸기)
 const push = new PushService(db, vapid.publicKey, PushService.webPushSender(vapid, process.env.VAPID_SUBJECT ?? 'mailto:admin@example.com'));
+// 안드로이드 앱 푸시: FIREBASE_SERVICE_ACCOUNT = 서비스 계정 JSON 파일 경로 (없으면 꺼짐)
+push.fcm = fcmFromEnv(db);
 // AI API 키(ANTHROPIC_API_KEY 또는 GEMINI_API_KEY)가 있을 때만 앱 안에서 바로 리포트
 const ai = aiFromEnv(process.env);
 if (ai) console.log(`[ai] ${ai.name} 사용`);

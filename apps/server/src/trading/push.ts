@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import webpush from 'web-push';
+import type { FcmService } from './fcm';
 
 export interface PushMessage {
   title: string;
@@ -41,6 +42,9 @@ export function loadVapidKeys(file: string): VapidKeys {
 
 /** 폰 푸시: 구독 저장 + 모든 기기로 발송, 만료된 구독은 정리 */
 export class PushService {
+  /** 안드로이드 앱(FCM). 서비스 계정이 있을 때만 */
+  fcm?: FcmService;
+
   constructor(
     private readonly db: DatabaseSync,
     readonly publicKey: string,
@@ -94,6 +98,6 @@ export class PushService {
         }
       }),
     );
-    return sent;
+    return sent + ((await this.fcm?.notify(msg)) ?? 0);
   }
 }

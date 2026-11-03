@@ -25,11 +25,12 @@ import type {
   WatchGroup,
 } from '@stock/shared';
 import type { CoachReport, DrawdownResult, TradeStats } from '@stock/core';
+import { serverBase } from './server';
 
 export type { RankingType };
 
-/** APK(Capacitor)에서는 서버 주소를 환경변수로 지정 */
-export const API_BASE: string = import.meta.env.VITE_API_BASE ?? '';
+/** 서버 주소 (앱에서 정한 값 → VITE_API_BASE → 같은 주소). 바꾸면 새로고침 */
+export const API_BASE: string = serverBase();
 
 /** 서버가 준 이유를 그대로 담은 오류 (화면에 바로 표시) */
 export class ApiError extends Error {
@@ -134,6 +135,9 @@ export const api = {
   coach: () => get<CoachView>('/api/coach'),
   settings: () => get<{ stopLossRate: number | null }>('/api/settings'),
   saveSettings: (s: { stopLossRate: number | null }) => send<{ stopLossRate: number | null }>('PUT', '/api/settings', s),
+  fcmInfo: () => get<{ enabled: boolean; devices: number }>('/api/push/fcm'),
+  fcmRegister: (token: string) => send<{ devices: number }>('POST', '/api/push/fcm', { token }),
+  fcmUnregister: (token: string) => send<{ devices: number }>('POST', '/api/push/fcm/unregister', { token }),
   journal: () => get<{ entries: JournalEntry[]; stocks: Record<string, StockInfo> }>('/api/journal'),
   saveNote: (orderId: string, note: JournalNote) => send<{ note: JournalNote }>('PUT', `/api/journal/${orderId}`, note),
   exchange: (from: Currency, amount: number) => send<{ trade: FxTrade }>('POST', '/api/fx', { from, amount }),

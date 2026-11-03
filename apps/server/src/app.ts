@@ -5,6 +5,7 @@ import Fastify from 'fastify';
 import type { AiProvider } from './ai/provider';
 import { registerAiRoutes } from './ai/routes';
 import { registerOrderBookRoute, type OrderBookFetcher } from './market/orderbookRoutes';
+import { registerCors } from './cors';
 import type { MarketDataProvider } from './market/provider';
 import { registerAchievementRoutes } from './trading/achievementRoutes';
 import type { AchievementService } from './trading/achievements';
@@ -12,6 +13,7 @@ import { registerReplayRoutes } from './replay/routes';
 import type { ReplayStore } from './replay/store';
 import { registerAlertRoutes, startNotifier } from './trading/alertRoutes';
 import type { AlertService } from './trading/alerts';
+import { registerFcmRoutes } from './trading/fcmRoutes';
 import type { PushService } from './trading/push';
 import { registerTradingRoutes } from './trading/routes';
 import type { TradingService } from './trading/service';
@@ -55,6 +57,7 @@ export async function buildApp({
   indicesIntervalMs = 3_000,
 }: AppOptions) {
   const app = Fastify({ logger });
+  registerCors(app);
   await app.register(websocket);
   if (trading) registerTradingRoutes(app, trading, provider, watchlists);
   if (trading) registerAiRoutes(app, { trading, provider, ai: ai ?? null });
@@ -62,6 +65,7 @@ export async function buildApp({
   if (achievements) registerAchievementRoutes(app, achievements);
   if (replay) registerReplayRoutes(app, { provider, store: replay });
   registerOrderBookRoute(app, provider, orderBook);
+  registerFcmRoutes(app, push);
 
   const withQuotes = async (codes: string[]) => {
     const quotes = await provider.getQuotes(codes);
