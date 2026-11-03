@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Card, SubPage } from '../components/Layout';
-import { normalizeServer, saveServer, serverBase, testServer } from '../lib/server';
+import { LOCAL, isLocalMode, normalizeServer, saveServer, serverBase, testServer } from '../lib/server';
 import { useTheme } from '../lib/theme';
 
 /** 서버 주소 입력 → /api/health로 확인 → 저장 */
@@ -46,6 +46,26 @@ function ServerForm() {
   );
 }
 
+/** 서버 없이 쓰기: 시세는 폰이 직접 받고, 계좌는 이 기기에만 저장 */
+function LocalCard() {
+  const on = isLocalMode();
+  return (
+    <Card className="space-y-3">
+      <p className="font-semibold">서버 없이 쓰기 {on && <span className="ml-1 text-sm text-brand">사용 중</span>}</p>
+      <ul className="list-disc space-y-1 pl-5 text-sm text-sub">
+        <li>서버·카드 없이 이 폰만으로 써요</li>
+        <li>지정가 주문·가격 알림은 앱을 열 때 확인해요 (꺼져 있던 동안 가격이 닿았으면 그때 가격으로 체결)</li>
+        <li>계좌는 이 기기에만 저장돼요. 앱을 지우면 같이 지워져요</li>
+      </ul>
+      {!on && (
+        <button onClick={() => saveServer(LOCAL)} className="w-full rounded-xl bg-soft py-3 font-semibold">
+          서버 없이 시작하기
+        </button>
+      )}
+    </Card>
+  );
+}
+
 /** 앱 처음 켰을 때 (서버 주소가 없을 때) */
 export function ServerSetupFirst() {
   useTheme();
@@ -53,8 +73,9 @@ export function ServerSetupFirst() {
     <div className="mx-auto min-h-dvh max-w-[480px] space-y-4 px-4 pt-[calc(env(safe-area-inset-top)+48px)]">
       <div className="px-1">
         <h1 className="text-[24px] font-bold">STOCK 시작하기</h1>
-        <p className="mt-1 text-sub">연결할 서버 주소를 알려주세요</p>
+        <p className="mt-1 text-sub">서버 없이 바로 쓰거나, 내 서버에 연결해요</p>
       </div>
+      <LocalCard />
       <ServerForm />
     </div>
   );
@@ -64,6 +85,7 @@ export function ServerSetupFirst() {
 export function ServerSetup() {
   return (
     <SubPage title="서버 주소">
+      <LocalCard />
       <ServerForm />
       <button onClick={() => saveServer('')} className="w-full py-3 text-sm text-sub">
         저장된 주소 지우기

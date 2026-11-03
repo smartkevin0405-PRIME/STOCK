@@ -2,6 +2,8 @@ import type { AccountEvent, IndexQuote, Quote, ServerMessage } from '@stock/shar
 import { useEffect, useSyncExternalStore } from 'react';
 import { API_BASE } from './api';
 import { getAuthState, getToken } from './auth';
+import { LocalSocket } from './localSocket';
+import { isLocalMode } from './server';
 
 export type AlertMessage = Extract<ServerMessage, { type: 'alert' }>;
 export type AchievementMessage = Extract<ServerMessage, { type: 'achievement' }>;
@@ -12,7 +14,7 @@ class LiveStore {
   private indices: IndexQuote[] = [];
   private listeners = new Set<() => void>();
   private counts = new Map<string, number>();
-  private ws: WebSocket | undefined;
+  private ws: WebSocket | LocalSocket | undefined;
   private pending = false;
   private version = 0;
   private accountHandler: ((e: AccountEvent) => void) | undefined;
@@ -77,14 +79,15 @@ class LiveStore {
     const token = getToken();
     // 브라우저 WebSocket은 헤더를 못 붙여서 주소에 토큰
     const url = base.replace(/^http/, 'ws') + '/ws' + (token ? `?token=${encodeURIComponent(token)}` : '');
-    const ws = new WebSocket(url);
+    // 서버 없이 쓸 땐 앱 안 연결
+    const ws = isLocalMode() ? new LocalSocket() : new WebSocket(url);
     this.ws = ws;
     ws.onopen = () => {
       this.connected = true;
       this.sendSubscriptions();
       this.emit();
     };
-    ws.onmessage = (e) => {
+    ws.onmessage = (e: { data: unknown }) => {
       const msg = JSON.parse(String(e.data)) as ServerMessage;
       if (msg.type === 'quote') this.quotes.set(msg.quote.code, msg.quote);
       else if (msg.type === 'indices') this.indices = msg.indices;
@@ -124,7 +127,7 @@ class LiveStore {
   }
 
   private sendSubscriptions() {
-    if (this.ws?.readyState === WebSocket.OPEN) {
+    if (this.ws?.readyState === 1) {
       this.ws.send(JSON.stringify({ type: 'subscribe', codes: [...this.counts.keys()] }));
     }
   }

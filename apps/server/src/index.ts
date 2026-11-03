@@ -3,13 +3,10 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildApp } from './app';
 import { AuthService } from './auth';
-import { StockDirectory } from './market/directory';
-import { DirectoryStore } from './market/directoryStore';
-import { LiveExtras } from './market/extras';
-import { LiveProvider } from './market/live';
+import { createLiveProvider } from './market/createLive';
+import type { DirectoryStore } from './market/directoryStore';
+import { fileStorage } from './market/fileStorage';
 import { MockProvider } from './market/mock';
-import { SEED_STOCKS } from './market/mockStocks';
-import { NaverSource, fetchNaverDirectory, fetchNaverRankings } from './market/naver';
 import type { MarketDataProvider } from './market/provider';
 import { AchievementService } from './trading/achievements';
 import { ReplayStore } from './replay/store';
@@ -20,8 +17,6 @@ import { fcmFromEnv } from './trading/fcm';
 import { PushService, loadVapidKeys } from './trading/push';
 import { TradingService } from './trading/service';
 import { WatchlistService } from './trading/watchlist';
-import { FallbackSource } from './market/sources';
-import { YahooSource, fetchYahooDaily } from './market/yahoo';
 import { kisFromEnv } from './market/kis';
 import type { OrderBookFetcher } from './market/orderbookRoutes';
 import { aiFromEnv } from './ai/provider';
@@ -39,32 +34,20 @@ let orderBook: OrderBookFetcher | undefined;
 if (mode === 'mock') {
   provider = new MockProvider();
 } else {
-  const directory = new StockDirectory(SEED_STOCKS);
-  store = new DirectoryStore({
-    directory,
-    file: join(dataDir, 'stocks.json'),
-    fetchAll: () => fetchNaverDirectory(),
-    minCount: 1_000,
-    log: (m) => console.log(`[stocks] ${m}`),
-  });
-  await store.start();
   // 한투 키(KIS_APP_KEY·KIS_APP_SECRET)가 있으면 맨 앞에 (시세 조회만, 주문 불가)
   const kis = kisFromEnv(process.env, dataDir);
   if (kis) {
     console.log(`[kis] 한국투자증권 시세 사용 (${kis.env})`);
     orderBook = (stock) => kis.KR.fetchOrderBook(stock);
   }
-  provider = new LiveProvider({
-    directory,
-    // 순서대로 시도: 앞 소스가 막히거나 못 주는 종목은 다음 소스로
-    sources: {
-      KR: new FallbackSource([...(kis ? [kis.KR] : []), new NaverSource('KR'), new YahooSource('KR')]),
-      US: new FallbackSource([...(kis ? [kis.US] : []), new NaverSource('US'), new YahooSource('US')]),
-    },
-    extras: new LiveExtras(),
-    rankings: (type, market) => fetchNaverRankings(type, market),
-    indexHistory: fetchYahooDaily,
+  const live = createLiveProvider({
+    storage: fileStorage(join(dataDir, 'stocks.json')),
+    first: kis ? { KR: kis.KR, US: kis.US } : undefined,
+    log: (m) => console.log(`[stocks] ${m}`),
   });
+  store = live.store;
+  await store.start();
+  provider = live.provider;
 }
 
 await provider.start();

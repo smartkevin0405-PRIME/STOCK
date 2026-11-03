@@ -1,7 +1,11 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
 import type { StockInfo } from '@stock/shared';
 import type { StockDirectory } from './directory';
+
+/** 글 하나를 읽고 쓰는 저장소 (없으면 read가 null) */
+export interface TextStorage {
+  read(): Promise<string | null>;
+  write(text: string): Promise<void>;
+}
 
 interface Saved {
   updatedAt: number;
@@ -10,8 +14,8 @@ interface Saved {
 
 export interface DirectoryStoreOptions {
   directory: StockDirectory;
-  /** 받아둔 목록을 저장할 파일 (재시작 때 바로 사용) */
-  file: string;
+  /** 받아둔 목록을 저장할 곳 (재시작 때 바로 사용). 서버는 파일, 앱은 기기 저장소 */
+  storage: TextStorage;
   fetchAll: () => Promise<StockInfo[]>;
   /** 이보다 오래되면 새로 받음 */
   maxAgeMs?: number;
@@ -31,7 +35,9 @@ export class DirectoryStore {
 
   async load(): Promise<void> {
     try {
-      const saved = JSON.parse(await readFile(this.o.file, 'utf8')) as Saved;
+      const text = await this.o.storage.read();
+      if (!text) return;
+      const saved = JSON.parse(text) as Saved;
       if (Array.isArray(saved.stocks) && saved.stocks.length >= (this.o.minCount ?? 1)) {
         this.o.directory.replace(saved.stocks);
         this.updatedAt = saved.updatedAt;
@@ -53,8 +59,7 @@ export class DirectoryStore {
         if (stocks.length < (this.o.minCount ?? 1)) throw new Error(`종목이 너무 적어요 (${stocks.length}개)`);
         this.o.directory.replace(stocks);
         this.updatedAt = (this.o.now ?? Date.now)();
-        await mkdir(dirname(this.o.file), { recursive: true });
-        await writeFile(this.o.file, JSON.stringify({ updatedAt: this.updatedAt, stocks } satisfies Saved));
+        await this.o.storage.write(JSON.stringify({ updatedAt: this.updatedAt, stocks } satisfies Saved));
         this.o.log?.(`종목 목록 ${stocks.length}개 갱신`);
       } finally {
         this.refreshing = undefined;

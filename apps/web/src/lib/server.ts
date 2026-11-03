@@ -24,13 +24,28 @@ export function normalizeServer(input: string): string {
   return url;
 }
 
-export function serverBase(): string {
+/** 서버 없이 쓰기 (시세는 폰이 직접, 계좌는 기기 안에). 'local:mock'은 가짜 시세 (테스트용) */
+export const LOCAL = 'local';
+
+function setting(): string {
   return stored() || (import.meta.env.VITE_API_BASE ?? '');
+}
+
+export function isLocalMode(): boolean {
+  return setting().startsWith(LOCAL);
+}
+
+export function isLocalMock(): boolean {
+  return setting() === `${LOCAL}:mock`;
+}
+
+export function serverBase(): string {
+  return isLocalMode() ? '' : setting();
 }
 
 /** 앱에서 서버 주소를 아직 안 정했으면 설정 화면부터 */
 export function needsServerSetup(): boolean {
-  return isNative() && !serverBase();
+  return isNative() && !setting();
 }
 
 /** 저장 후 새로고침 (API·실시간 연결이 새 주소로 다시 시작) */

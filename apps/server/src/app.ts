@@ -1,7 +1,5 @@
 import fastifyStatic from '@fastify/static';
 import websocket from '@fastify/websocket';
-import { getMarketStatus, searchStocks } from '@stock/core';
-import type { CandleInterval, ClientMessage, Quote, ServerMessage } from '@stock/shared';
 import Fastify from 'fastify';
 import type { AiProvider } from './ai/provider';
 import { registerAiRoutes } from './ai/routes';
@@ -9,19 +7,19 @@ import { registerOrderBookRoute, type OrderBookFetcher } from './market/orderboo
 import { registerCors } from './cors';
 import { registerAuth, type AuthService } from './auth';
 import type { MarketDataProvider } from './market/provider';
+import { registerMarketRoutes } from './market/routes';
+import { createRealtime } from './realtime';
 import { registerAchievementRoutes } from './trading/achievementRoutes';
 import type { AchievementService } from './trading/achievements';
 import { registerReplayRoutes } from './replay/routes';
 import type { ReplayStore } from './replay/store';
-import { registerAlertRoutes, startNotifier } from './trading/alertRoutes';
+import { registerAlertRoutes } from './trading/alertRoutes';
 import type { AlertService } from './trading/alerts';
 import { registerFcmRoutes } from './trading/fcmRoutes';
 import type { PushService } from './trading/push';
 import { registerTradingRoutes } from './trading/routes';
 import type { TradingService } from './trading/service';
 import type { WatchlistService } from './trading/watchlist';
-
-const INTERVALS: readonly CandleInterval[] = ['1m', '5m', '15m', '60m', '1d', '1w', '1M'];
 
 export interface AppOptions {
   provider: MarketDataProvider;
@@ -80,137 +78,17 @@ export async function buildApp({
   registerOrderBookRoute(app, provider, orderBook);
   registerFcmRoutes(app, push);
 
-  const withQuotes = async (codes: string[]) => {
-    const quotes = await provider.getQuotes(codes);
-    return new Map(quotes.map((q) => [q.code, q]));
-  };
+  registerMarketRoutes(app, provider, { auth: !!auth });
 
-  app.get('/api/health', async () => ({ ok: true, auth: !!auth, ...provider.status() }));
-
-  // 검색 (q 없으면 전체)
-  app.get<{ Querystring: { q?: string; limit?: string } }>('/api/stocks', async (req) => {
-    const all = await provider.listStocks();
-    const limit = Math.min(Number(req.query.limit) || 30, 100);
-    const q = req.query.q?.trim() ?? '';
-    const stocks = q ? searchStocks(all, q, limit) : all.slice(0, limit);
-    const quotes = await withQuotes(stocks.map((s) => s.code));
-    return { items: stocks.map((stock) => ({ stock, quote: quotes.get(stock.code) ?? null })) };
-  });
-
-  app.get<{ Params: { code: string } }>('/api/stocks/:code', async (req, reply) => {
-    const stock = await provider.getStock(req.params.code);
-    if (!stock) return reply.code(404).send({ error: '종목을 찾을 수 없어요' });
-    const [quote] = await provider.getQuotes([stock.code]);
-    return { stock, quote: quote ?? null };
-  });
-
-  app.get<{ Querystring: { codes?: string } }>('/api/quotes', async (req) => {
-    const codes = (req.query.codes ?? '').split(',').map((c) => c.trim()).filter(Boolean).slice(0, 100);
-    return { quotes: await provider.getQuotes(codes) };
-  });
-
-  app.get<{ Params: { code: string }; Querystring: { interval?: string; limit?: string } }>(
-    '/api/candles/:code',
-    async (req, reply) => {
-      const interval = (req.query.interval ?? '1d') as CandleInterval;
-      if (!INTERVALS.includes(interval)) return reply.code(400).send({ error: `interval은 ${INTERVALS.join(', ')} 중 하나` });
-      const limit = Math.min(Number(req.query.limit) || 300, 1_000);
-      return { candles: await provider.getCandles(req.params.code, interval, limit) };
-    },
-  );
-
-  app.get('/api/indices', async () => ({
-    indices: await provider.getIndices(),
-    usdKrw: await provider.getUsdKrw(),
-  }));
-
-  app.get('/api/market-status', async () => ({
-    KR: getMarketStatus('KR'),
-    US: getMarketStatus('US'),
-  }));
-
-  // 순위: 급상승·급하락·거래대금
-  app.get<{ Querystring: { type?: string; market?: string } }>('/api/rankings', async (req, reply) => {
-    const type = (['gainers', 'losers', 'turnover'] as const).find((t) => t === req.query.type) ?? 'gainers';
-    const market = req.query.market === 'KR' || req.query.market === 'US' ? req.query.market : undefined;
-    try {
-      return { items: await provider.getRankings(type, market) };
-    } catch (e) {
-      return reply.code(502).send({ error: (e as Error).message });
-    }
-  });
-
-  // 실시간: 구독한 종목 시세 + 주기적 지수
-  const clients = new Set<{ send: (m: ServerMessage) => void; codes: Set<string> }>();
-  const syncWatch = () => {
-    const all = new Set<string>();
-    for (const c of clients) for (const code of c.codes) all.add(code);
-    provider.watch('screens', all);
-  };
-
-  const offQuote = provider.onQuote((quote: Quote) => {
-    for (const c of clients) if (c.codes.has(quote.code)) c.send({ type: 'quote', quote });
-  });
-  const indicesTimer = setInterval(async () => {
-    if (clients.size === 0) return;
-    const indices = await provider.getIndices();
-    for (const c of clients) c.send({ type: 'indices', indices });
-  }, indicesIntervalMs);
-
-  // 체결·주문·환전·리셋 알림은 모든 화면에
-  const offAccount = trading?.onEvent((e) => {
-    for (const c of clients) c.send({ type: 'account', ...e });
-  });
-
-  // 업적·챌린지 달성 알림
-  const offAchievement = achievements?.onUnlock((u) => {
-    for (const c of clients) c.send({ type: 'achievement', ...u });
-  });
-
-  // 가격 알림: 시세 확인 → 폰 푸시 + 앱 화면
-  const stopNotifier = alerts
-    ? startNotifier({
-        provider,
-        alerts,
-        push,
-        trading,
-        broadcast: (alert, stock) => {
-          for (const c of clients) c.send({ type: 'alert', alert, ...(stock ? { stock } : {}) });
-        },
-      })
-    : undefined;
-
-  app.addHook('onClose', async () => {
-    stopNotifier?.();
-    offAccount?.();
-    offAchievement?.();
-    offQuote();
-    clearInterval(indicesTimer);
-  });
+  const realtime = createRealtime({ provider, trading, alerts, push, achievements, indicesIntervalMs });
+  app.addHook('onClose', async () => realtime.stop());
 
   app.get('/ws', { websocket: true }, (socket) => {
-    const client = {
-      codes: new Set<string>(),
-      send: (m: ServerMessage) => {
-        if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(m));
-      },
-    };
-    clients.add(client);
-    socket.on('message', (raw: Buffer) => {
-      try {
-        const msg = JSON.parse(raw.toString()) as ClientMessage;
-        if (msg.type === 'subscribe' && Array.isArray(msg.codes)) {
-          client.codes = new Set(msg.codes.slice(0, 200).map(String));
-          syncWatch();
-        }
-      } catch {
-        // 잘못된 메시지는 무시
-      }
+    const client = realtime.connect((m) => {
+      if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(m));
     });
-    socket.on('close', () => {
-      clients.delete(client);
-      syncWatch();
-    });
+    socket.on('message', (raw: Buffer) => client.receive(raw.toString()));
+    socket.on('close', () => client.close());
   });
 
   if (webDir) {

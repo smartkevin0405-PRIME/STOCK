@@ -25,7 +25,7 @@ import type {
   WatchGroup,
 } from '@stock/shared';
 import type { CoachReport, DrawdownResult, TradeStats } from '@stock/core';
-import { serverBase } from './server';
+import { isLocalMock, isLocalMode, serverBase } from './server';
 import { getToken, unauthorized } from './auth';
 
 export type { RankingType };
@@ -46,6 +46,12 @@ export class ApiError extends Error {
 
 /** 로그인 토큰을 붙여서 요청. 401이면 로그인 화면으로 */
 async function request(path: string, init: RequestInit = {}): Promise<Response> {
+  // 서버 없이 쓰기: 앱 안에서 처리 (처음 한 번 불러옴)
+  if (isLocalMode()) {
+    const local = await import('../local/backend');
+    local.startLocal(isLocalMock());
+    return local.localFetch(path, init);
+  }
   const token = getToken();
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
