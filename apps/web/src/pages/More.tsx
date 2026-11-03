@@ -10,7 +10,7 @@ const MENU: { label: string; to?: string; milestone?: string }[] = [
   { label: '시즌 기록 · 계좌 리셋', to: '/seasons' },
   { label: '가격 알림 · 폰 알림', to: '/alerts' },
   { label: '챌린지 · 업적', to: '/achievements' },
-  { label: '타임머신 리플레이', milestone: 'M5' },
+  { label: '타임머신 리플레이', to: '/replay' },
 ];
 
 export function More() {

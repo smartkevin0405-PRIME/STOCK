@@ -17,11 +17,13 @@ import { Home } from './pages/Home';
 import { Journal } from './pages/Journal';
 import { More } from './pages/More';
 import { Orders } from './pages/Orders';
+import { Replay } from './pages/Replay';
+import { ReplayPlay } from './pages/ReplayPlay';
 import { Seasons } from './pages/Seasons';
 import { StockDetail } from './pages/StockDetail';
 import { Watchlist } from './pages/Watchlist';
 
-const SUB_PAGES = ['/stock/', '/orders', '/fx', '/seasons', '/alerts', '/achievements'];
+const SUB_PAGES = ['/stock/', '/orders', '/fx', '/seasons', '/alerts', '/achievements', '/replay'];
 
 function Shell() {
   useTheme();
@@ -53,6 +55,8 @@ function Shell() {
         <Route path="/seasons" element={<Seasons />} />
         <Route path="/alerts" element={<Alerts />} />
         <Route path="/achievements" element={<Achievements />} />
+        <Route path="/replay" element={<Replay />} />
+        <Route path="/replay/:id" element={<ReplayPlay />} />
       </Routes>
       {showTabs && <TabBar />}
       <Toaster />

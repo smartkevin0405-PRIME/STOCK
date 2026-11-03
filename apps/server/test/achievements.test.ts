@@ -48,7 +48,7 @@ describe('업적', () => {
   it('처음엔 전부 잠김, 챌린지 4개', async () => {
     const { ach, unlocked } = setup();
     const v = await ach.view();
-    expect(v.achievements).toHaveLength(12);
+    expect(v.achievements).toHaveLength(15);
     expect(v.achievements.every((a) => a.unlockedAt === undefined)).toBe(true);
     expect(v.challenges.map((c) => c.id)).toEqual(['profit5', 'stopLoss10', 'mdd10', 'journal10']);
     expect(v.challenges.find((c) => c.id === 'stopLoss10')).toMatchObject({ status: 'needsSetting', hint: expect.any(String), progress: 0 });
@@ -244,7 +244,7 @@ describe('업적 API', () => {
 
     const res = await app.inject('/api/achievements');
     expect(res.statusCode).toBe(200);
-    expect(res.json().achievements).toHaveLength(12);
+    expect(res.json().achievements).toHaveLength(15);
 
     expect((await app.inject({ method: 'POST', url: '/api/watchlists', payload: { name: '2차전지' } })).statusCode).toBe(201);
     expect(await got).toMatchObject({ kind: 'achievement', id: 'watchGroup', title: '관심 그룹 만들기' });
@@ -252,5 +252,22 @@ describe('업적 API', () => {
     const msg: ServerMessage = { type: 'achievement', ...(await got) };
     expect(msg.type).toBe('achievement');
     await app.close();
+  });
+});
+
+describe('리플레이 업적', () => {
+  it('리플레이 결과로 시간 여행자 · 코로나장 생존 · +20% 달성', async () => {
+    const { db, ach, ids } = setup();
+    const save = (scenario: string, rate: number) =>
+      db
+        .prepare('INSERT INTO replay_results (scenario_id, codes, start_cash, final_value, return_rate, trade_count, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(scenario, '[]', 10_000_000, 10_000_000 * (1 + rate), rate, 3, KR_OPEN);
+    save('covid-2020-kr', -0.03);
+    await ach.check();
+    expect(ids()).toContain('replayFirst');
+    expect(ids()).not.toContain('covidSurvivor');
+    save('covid-2020-us', 0.25);
+    await ach.check();
+    expect(ids()).toEqual(expect.arrayContaining(['covidSurvivor', 'replayPro']));
   });
 });

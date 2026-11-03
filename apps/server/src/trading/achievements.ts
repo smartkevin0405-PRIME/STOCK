@@ -1,6 +1,7 @@
 import { buildClosedTrades, calcMaxDrawdown, type ClosedTrade } from '@stock/core';
 import type { Achievement, AchievementUnlock, AchievementsView, Challenge } from '@stock/shared';
 import type { DatabaseSync } from 'node:sqlite';
+import { adjustForSplits } from './corporate';
 import type { TradingService } from './service';
 import { periodStart } from './stats';
 
@@ -44,6 +45,11 @@ export interface Facts {
   maxWinStreak: number;
   stopLossRate?: number;
   stopKept: number;
+  /** 타임머신 리플레이 완주 횟수 */
+  replays: number;
+  /** 2020 코로나 시나리오를 손실 없이 마쳤는지 */
+  covidSurvived: boolean;
+  bestReplayReturn: number;
 }
 
 interface AchievementDef {
@@ -57,11 +63,7 @@ interface AchievementDef {
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
-/**
- * 업적 목록 (화면 순서).
- * 리플레이 업적(예: 코로나장 생존)은 리플레이 기능이 생기면 여기에 done: () => false 로 추가하고,
- * 리플레이 쪽에서 결과가 나오면 AchievementService.grant(id)를 부르면 됨.
- */
+/** 업적 목록 (화면 순서). 리플레이 업적은 저장된 리플레이 결과로 판단 */
 export const ACHIEVEMENTS: readonly AchievementDef[] = [
   { id: 'firstBuy', icon: '🛒', title: '첫 매수', desc: '처음으로 주식을 샀어요', done: (f) => f.buys > 0 },
   { id: 'firstProfit', icon: '💰', title: '첫 익절', desc: '수익을 내고 팔았어요', done: (f) => f.wins > 0 },
@@ -96,6 +98,9 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   { id: 'firstSeasonEnd', icon: '🏁', title: '첫 시즌 마감', desc: '계좌를 리셋하고 시즌을 마쳤어요', done: (f) => f.closedSeasons > 0 },
   { id: 'firstAlert', icon: '🔔', title: '가격 알림 첫 설정', desc: '가격 알림을 처음 걸었어요', done: (f) => f.alerts > 0 },
   { id: 'watchGroup', icon: '⭐', title: '관심 그룹 만들기', desc: '나만의 관심종목 그룹을 만들었어요', done: (f) => f.ownWatchGroup },
+  { id: 'replayFirst', icon: '🕰️', title: '시간 여행자', desc: '타임머신 리플레이를 처음 끝까지 했어요', done: (f) => f.replays > 0 },
+  { id: 'covidSurvivor', icon: '🦠', title: '코로나장 생존', desc: '2020 코로나 폭락 리플레이를 손실 없이 마쳤어요', done: (f) => f.covidSurvived },
+  { id: 'replayPro', icon: '🧠', title: '리플레이 +20%', desc: '리플레이에서 +20% 넘게 벌었어요', done: (f) => f.bestReplayReturn >= 0.2 },
 ];
 
 const CHALLENGES = {
@@ -303,7 +308,8 @@ export class AchievementService {
     const trades: ClosedTrade[] = [];
     for (const acc of this.trading.repo.accounts(u)) {
       try {
-        trades.push(...buildClosedTrades(this.trading.repo.allFills(acc.id)));
+        const splits = this.trading.repo.corporateActions(acc.id).filter((a) => a.kind === 'split');
+        trades.push(...buildClosedTrades(adjustForSplits(this.trading.repo.allFills(acc.id), splits)));
       } catch {
         // 기록이 어긋난 시즌은 건너뜀
       }
@@ -345,6 +351,10 @@ export class AchievementService {
       maxWinStreak,
       ...(stopLossRate !== undefined ? { stopLossRate } : {}),
       stopKept: stopLossRate === undefined ? 0 : trades.filter((t) => keptStopLoss(t.priceRate, stopLossRate)).length,
+      replays: this.count('SELECT COUNT(*) AS n FROM replay_results WHERE user_id = ?'),
+      covidSurvived: this.count("SELECT COUNT(*) AS n FROM replay_results WHERE user_id = ? AND scenario_id LIKE 'covid-2020-%' AND return_rate >= 0") > 0,
+      bestReplayReturn:
+        (this.db.prepare('SELECT MAX(return_rate) AS r FROM replay_results WHERE user_id = ?').get(u) as { r: number | null }).r ?? 0,
     };
   }
 
