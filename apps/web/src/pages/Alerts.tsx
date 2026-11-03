@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Card, Empty, SectionTitle, SubPage } from '../components/Layout';
+import { NativePushCard } from '../components/NativePushCard';
 import { describeAlert } from '../lib/alerts';
 import { api } from '../lib/api';
 import { formatDateTime, formatPrice } from '../lib/format';
 import { disablePush, enablePush, pushState, type PushState } from '../lib/push';
+import { isNative } from '../lib/server';
 import { toast } from '../lib/toast';
 import { useAsync } from '../lib/useAsync';
 
@@ -24,7 +26,7 @@ export function Alerts() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    void pushState().then(setState);
+    if (!isNative()) void pushState().then(setState);
   }, []);
 
   const run = async (fn: () => Promise<unknown>, done: string) => {
@@ -45,7 +47,8 @@ export function Alerts() {
 
   return (
     <SubPage title="가격 알림">
-      <Card className="space-y-3">
+      {/* 안드로이드 앱은 FCM, 웹은 웹 푸시 */}
+      {isNative() ? <NativePushCard /> : <Card className="space-y-3">
         <SectionTitle>폰 알림</SectionTitle>
         <p className="text-sm text-sub">{state ? STATE_TEXT[state] : '확인 중…'}</p>
         {state === 'off' && (
@@ -64,7 +67,7 @@ export function Alerts() {
           </div>
         )}
         <p className="text-xs text-sub">가격 알림과, 걸어둔 주문이 나중에 체결될 때 알려드려요.</p>
-      </Card>
+      </Card>}
 
       <Card className="py-3">
         <SectionTitle>켜져 있는 알림 {active.length > 0 && <span className="text-sub">{active.length}</span>}</SectionTitle>

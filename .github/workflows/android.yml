@@ -1,0 +1,78 @@
+# 안드로이드 APK(디버그) 빌드 → Actions 실행 화면의 Artifacts에서 받기
+# 설명: docs/APK.md
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'package-lock.json'
+      - '.github/workflows/android.yml'
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # 저장소 변수 VITE_API_BASE(선택): 넣으면 앱이 서버 주소를 묻지 않고 바로 그 서버로 연결
+      - name: 웹 빌드
+        run: npm run build
+        env:
+          VITE_API_BASE: ${{ vars.VITE_API_BASE }}
+
+      # 저장소 시크릿 GOOGLE_SERVICES_JSON(선택): 있으면 푸시 켜진 APK
+      - name: google-services.json 넣기 (있을 때만)
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > apps/web/android/app/google-services.json
+            echo "푸시 켜진 APK로 빌드"
+          else
+            echo "google-services.json 없음 → 푸시 없이 빌드"
+          fi
+
+      # 저장소 시크릿 DEBUG_KEYSTORE_BASE64(선택): 매번 같은 서명 → 지우지 않고 업데이트 설치 가능
+      - name: 디버그 서명 키 (있을 때만)
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
+            mkdir -p ~/.android
+            echo "$DEBUG_KEYSTORE_BASE64" | base64 -d > ~/.android/debug.keystore
+          fi
+
+      - name: 안드로이드 프로젝트에 웹 복사
+        working-directory: apps/web
+        run: npx cap sync android
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: APK 빌드
+        working-directory: apps/web/android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: stock-apk
+          path: apps/web/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
