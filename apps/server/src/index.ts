@@ -15,6 +15,9 @@ import { TradingService } from './trading/service';
 import { WatchlistService } from './trading/watchlist';
 import { FallbackSource } from './market/sources';
 import { YahooSource, fetchYahooDaily } from './market/yahoo';
+import { kisFromEnv } from './market/kis';
+import type { OrderBookFetcher } from './market/orderbookRoutes';
+import { aiFromEnv } from './ai/provider';
 
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? '0.0.0.0';
@@ -24,6 +27,7 @@ const dataDir = process.env.DATA_DIR ?? join(process.cwd(), 'data');
 
 let store: DirectoryStore | undefined;
 let provider: MarketDataProvider;
+let orderBook: OrderBookFetcher | undefined;
 
 if (mode === 'mock') {
   provider = new MockProvider();
@@ -37,12 +41,18 @@ if (mode === 'mock') {
     log: (m) => console.log(`[stocks] ${m}`),
   });
   await store.start();
+  // 한투 키(KIS_APP_KEY·KIS_APP_SECRET)가 있으면 맨 앞에 (시세 조회만, 주문 불가)
+  const kis = kisFromEnv(process.env, dataDir);
+  if (kis) {
+    console.log(`[kis] 한국투자증권 시세 사용 (${kis.env})`);
+    orderBook = (stock) => kis.KR.fetchOrderBook(stock);
+  }
   provider = new LiveProvider({
     directory,
     // 순서대로 시도: 앞 소스가 막히거나 못 주는 종목은 다음 소스로
     sources: {
-      KR: new FallbackSource([new NaverSource('KR'), new YahooSource('KR')]),
-      US: new FallbackSource([new NaverSource('US'), new YahooSource('US')]),
+      KR: new FallbackSource([...(kis ? [kis.KR] : []), new NaverSource('KR'), new YahooSource('KR')]),
+      US: new FallbackSource([...(kis ? [kis.US] : []), new NaverSource('US'), new YahooSource('US')]),
     },
     extras: new LiveExtras(),
     rankings: (type, market) => fetchNaverRankings(type, market),
@@ -58,7 +68,10 @@ trading.start();
 const vapid = loadVapidKeys(join(dataDir, 'vapid.json'));
 // 푸시 서비스가 문제 있을 때 연락할 주소 (배포할 때 본인 주소로 바꾸기)
 const push = new PushService(db, vapid.publicKey, PushService.webPushSender(vapid, process.env.VAPID_SUBJECT ?? 'mailto:admin@example.com'));
-const app = await buildApp({ provider, trading, watchlists: new WatchlistService(db), alerts: new AlertService(db), push, logger: true });
+// AI API 키(ANTHROPIC_API_KEY 또는 GEMINI_API_KEY)가 있을 때만 앱 안에서 바로 리포트
+const ai = aiFromEnv(process.env);
+if (ai) console.log(`[ai] ${ai.name} 사용`);
+const app = await buildApp({ provider, trading, watchlists: new WatchlistService(db), alerts: new AlertService(db), push, logger: true, orderBook, ai });
 await app.listen({ port, host });
 
 const shutdown = async () => {

@@ -2,6 +2,9 @@ import websocket from '@fastify/websocket';
 import { getMarketStatus, searchStocks } from '@stock/core';
 import type { CandleInterval, ClientMessage, Quote, ServerMessage } from '@stock/shared';
 import Fastify from 'fastify';
+import type { AiProvider } from './ai/provider';
+import { registerAiRoutes } from './ai/routes';
+import { registerOrderBookRoute, type OrderBookFetcher } from './market/orderbookRoutes';
 import type { MarketDataProvider } from './market/provider';
 import { registerAlertRoutes, startNotifier } from './trading/alertRoutes';
 import type { AlertService } from './trading/alerts';
@@ -24,13 +27,19 @@ export interface AppOptions {
   logger?: boolean;
   /** 지수 브로드캐스트 간격 (ms) */
   indicesIntervalMs?: number;
+  /** 10단계 호가 (한투 키 있을 때만) */
+  orderBook?: OrderBookFetcher;
+  /** AI API (키 있을 때만). 없어도 질문 만들기는 됨 */
+  ai?: AiProvider | null;
 }
 
-export async function buildApp({ provider, trading, watchlists, alerts, push, logger = false, indicesIntervalMs = 3_000 }: AppOptions) {
+export async function buildApp({ provider, trading, watchlists, alerts, push, logger = false, indicesIntervalMs = 3_000, orderBook, ai }: AppOptions) {
   const app = Fastify({ logger });
   await app.register(websocket);
   if (trading) registerTradingRoutes(app, trading, provider, watchlists);
+  if (trading) registerAiRoutes(app, { trading, provider, ai: ai ?? null });
   if (alerts) registerAlertRoutes(app, { provider, alerts, push });
+  registerOrderBookRoute(app, provider, orderBook);
 
   const withQuotes = async (codes: string[]) => {
     const quotes = await provider.getQuotes(codes);
