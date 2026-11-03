@@ -2,12 +2,14 @@ import { useEffect } from 'react';
 import { HashRouter, Route, Routes, useLocation } from 'react-router';
 import { TabBar } from './components/Layout';
 import { Toaster } from './components/Toaster';
+import { handleAchievement } from './lib/achievements';
 import { describeAlert } from './lib/alerts';
 import { live } from './lib/live';
 import { handleAccountEvent } from './lib/notify';
 import { registerServiceWorker } from './lib/push';
 import { useTheme } from './lib/theme';
 import { toast } from './lib/toast';
+import { Achievements } from './pages/Achievements';
 import { Alerts } from './pages/Alerts';
 import { Discover } from './pages/Discover';
 import { Fx } from './pages/Fx';
@@ -19,7 +21,7 @@ import { Seasons } from './pages/Seasons';
 import { StockDetail } from './pages/StockDetail';
 import { Watchlist } from './pages/Watchlist';
 
-const SUB_PAGES = ['/stock/', '/orders', '/fx', '/seasons', '/alerts'];
+const SUB_PAGES = ['/stock/', '/orders', '/fx', '/seasons', '/alerts', '/achievements'];
 
 function Shell() {
   useTheme();
@@ -29,6 +31,7 @@ function Shell() {
   useEffect(() => {
     live.onAccountEvent(handleAccountEvent);
     live.onAlert(({ alert, stock }) => toast(`🔔 ${stock?.nameKo ?? alert.code} ${describeAlert(alert, stock)} 도달`, 'info', `alert:${alert.id}`));
+    live.onAchievement(handleAchievement);
     live.connect();
     registerServiceWorker();
   }, []);
@@ -49,6 +52,7 @@ function Shell() {
         <Route path="/fx" element={<Fx />} />
         <Route path="/seasons" element={<Seasons />} />
         <Route path="/alerts" element={<Alerts />} />
+        <Route path="/achievements" element={<Achievements />} />
       </Routes>
       {showTabs && <TabBar />}
       <Toaster />

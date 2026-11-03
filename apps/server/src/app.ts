@@ -3,6 +3,8 @@ import { getMarketStatus, searchStocks } from '@stock/core';
 import type { CandleInterval, ClientMessage, Quote, ServerMessage } from '@stock/shared';
 import Fastify from 'fastify';
 import type { MarketDataProvider } from './market/provider';
+import { registerAchievementRoutes } from './trading/achievementRoutes';
+import type { AchievementService } from './trading/achievements';
 import { registerAlertRoutes, startNotifier } from './trading/alertRoutes';
 import type { AlertService } from './trading/alerts';
 import type { PushService } from './trading/push';
@@ -21,16 +23,19 @@ export interface AppOptions {
   /** 가격 알림 (+ 폰 푸시) */
   alerts?: AlertService;
   push?: PushService;
+  /** 챌린지·업적 */
+  achievements?: AchievementService;
   logger?: boolean;
   /** 지수 브로드캐스트 간격 (ms) */
   indicesIntervalMs?: number;
 }
 
-export async function buildApp({ provider, trading, watchlists, alerts, push, logger = false, indicesIntervalMs = 3_000 }: AppOptions) {
+export async function buildApp({ provider, trading, watchlists, alerts, push, achievements, logger = false, indicesIntervalMs = 3_000 }: AppOptions) {
   const app = Fastify({ logger });
   await app.register(websocket);
   if (trading) registerTradingRoutes(app, trading, provider, watchlists);
   if (alerts) registerAlertRoutes(app, { provider, alerts, push });
+  if (achievements) registerAchievementRoutes(app, achievements);
 
   const withQuotes = async (codes: string[]) => {
     const quotes = await provider.getQuotes(codes);
@@ -114,6 +119,11 @@ export async function buildApp({ provider, trading, watchlists, alerts, push, lo
     for (const c of clients) c.send({ type: 'account', ...e });
   });
 
+  // 업적·챌린지 달성 알림
+  const offAchievement = achievements?.onUnlock((u) => {
+    for (const c of clients) c.send({ type: 'achievement', ...u });
+  });
+
   // 가격 알림: 시세 확인 → 폰 푸시 + 앱 화면
   const stopNotifier = alerts
     ? startNotifier({
@@ -130,6 +140,7 @@ export async function buildApp({ provider, trading, watchlists, alerts, push, lo
   app.addHook('onClose', async () => {
     stopNotifier?.();
     offAccount?.();
+    offAchievement?.();
     offQuote();
     clearInterval(indicesTimer);
   });

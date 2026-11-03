@@ -1,4 +1,7 @@
 // 앱 전체(웹·서버·규칙 엔진)가 같이 쓰는 타입
+import type { AchievementUnlock } from './achievements';
+
+export * from './achievements';
 
 export type Market = 'KR' | 'US';
 export type Currency = 'KRW' | 'USD';
@@ -215,7 +218,8 @@ export type ServerMessage =
   | { type: 'quote'; quote: Quote }
   | { type: 'indices'; indices: IndexQuote[] }
   | ({ type: 'account' } & AccountEvent)
-  | { type: 'alert'; alert: PriceAlert; stock?: StockInfo };
+  | { type: 'alert'; alert: PriceAlert; stock?: StockInfo }
+  | ({ type: 'achievement' } & AchievementUnlock);
 
 /** 웹 → 서버 WebSocket 메시지 */
 export type ClientMessage = { type: 'subscribe'; codes: string[] };

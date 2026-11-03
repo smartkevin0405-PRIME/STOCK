@@ -141,6 +141,15 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (user_id, key)
   );
   `,
+  // 업적
+  `
+  CREATE TABLE achievements (
+    user_id INTEGER NOT NULL DEFAULT 1,
+    achievement_id TEXT NOT NULL,
+    unlocked_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, achievement_id)
+  );
+  `,
 ];
 
 /** DB 열기 + 스키마 맞추기. ':memory:'는 테스트용 */
