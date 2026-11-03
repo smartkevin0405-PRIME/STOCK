@@ -8,7 +8,7 @@ const MENU: { label: string; to?: string; milestone?: string }[] = [
   { label: '주문내역', to: '/orders' },
   { label: '환전', to: '/fx' },
   { label: '시즌 기록 · 계좌 리셋', to: '/seasons' },
-  { label: '가격 알림', milestone: 'M3' },
+  { label: '가격 알림 · 폰 알림', to: '/alerts' },
   { label: '챌린지 · 업적', milestone: 'M5' },
   { label: '타임머신 리플레이', milestone: 'M5' },
 ];

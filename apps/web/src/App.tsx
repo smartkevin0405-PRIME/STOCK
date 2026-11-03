@@ -2,9 +2,13 @@ import { useEffect } from 'react';
 import { HashRouter, Route, Routes, useLocation } from 'react-router';
 import { TabBar } from './components/Layout';
 import { Toaster } from './components/Toaster';
-import { handleAccountEvent } from './lib/notify';
+import { describeAlert } from './lib/alerts';
 import { live } from './lib/live';
+import { handleAccountEvent } from './lib/notify';
+import { registerServiceWorker } from './lib/push';
 import { useTheme } from './lib/theme';
+import { toast } from './lib/toast';
+import { Alerts } from './pages/Alerts';
 import { Discover } from './pages/Discover';
 import { Fx } from './pages/Fx';
 import { Home } from './pages/Home';
@@ -15,14 +19,18 @@ import { Seasons } from './pages/Seasons';
 import { StockDetail } from './pages/StockDetail';
 import { Watchlist } from './pages/Watchlist';
 
+const SUB_PAGES = ['/stock/', '/orders', '/fx', '/seasons', '/alerts'];
+
 function Shell() {
   useTheme();
   const { pathname } = useLocation();
-  const showTabs = !['/stock/', '/orders', '/fx', '/seasons'].some((p) => pathname.startsWith(p));
+  const showTabs = !SUB_PAGES.some((p) => pathname.startsWith(p));
 
   useEffect(() => {
     live.onAccountEvent(handleAccountEvent);
+    live.onAlert(({ alert, stock }) => toast(`🔔 ${stock?.nameKo ?? alert.code} ${describeAlert(alert, stock)} 도달`, 'info', `alert:${alert.id}`));
     live.connect();
+    registerServiceWorker();
   }, []);
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -40,6 +48,7 @@ function Shell() {
         <Route path="/orders" element={<Orders />} />
         <Route path="/fx" element={<Fx />} />
         <Route path="/seasons" element={<Seasons />} />
+        <Route path="/alerts" element={<Alerts />} />
       </Routes>
       {showTabs && <TabBar />}
       <Toaster />

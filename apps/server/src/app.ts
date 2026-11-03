@@ -3,6 +3,9 @@ import { getMarketStatus, searchStocks } from '@stock/core';
 import type { CandleInterval, ClientMessage, Quote, ServerMessage } from '@stock/shared';
 import Fastify from 'fastify';
 import type { MarketDataProvider } from './market/provider';
+import { registerAlertRoutes, startNotifier } from './trading/alertRoutes';
+import type { AlertService } from './trading/alerts';
+import type { PushService } from './trading/push';
 import { registerTradingRoutes } from './trading/routes';
 import type { TradingService } from './trading/service';
 import type { WatchlistService } from './trading/watchlist';
@@ -15,15 +18,19 @@ export interface AppOptions {
   trading?: TradingService;
   /** 관심종목 그룹 */
   watchlists?: WatchlistService;
+  /** 가격 알림 (+ 폰 푸시) */
+  alerts?: AlertService;
+  push?: PushService;
   logger?: boolean;
   /** 지수 브로드캐스트 간격 (ms) */
   indicesIntervalMs?: number;
 }
 
-export async function buildApp({ provider, trading, watchlists, logger = false, indicesIntervalMs = 3_000 }: AppOptions) {
+export async function buildApp({ provider, trading, watchlists, alerts, push, logger = false, indicesIntervalMs = 3_000 }: AppOptions) {
   const app = Fastify({ logger });
   await app.register(websocket);
   if (trading) registerTradingRoutes(app, trading, provider, watchlists);
+  if (alerts) registerAlertRoutes(app, { provider, alerts, push });
 
   const withQuotes = async (codes: string[]) => {
     const quotes = await provider.getQuotes(codes);
@@ -107,7 +114,21 @@ export async function buildApp({ provider, trading, watchlists, logger = false, 
     for (const c of clients) c.send({ type: 'account', ...e });
   });
 
+  // 가격 알림: 시세 확인 → 폰 푸시 + 앱 화면
+  const stopNotifier = alerts
+    ? startNotifier({
+        provider,
+        alerts,
+        push,
+        trading,
+        broadcast: (alert, stock) => {
+          for (const c of clients) c.send({ type: 'alert', alert, ...(stock ? { stock } : {}) });
+        },
+      })
+    : undefined;
+
   app.addHook('onClose', async () => {
+    stopNotifier?.();
     offAccount?.();
     offQuote();
     clearInterval(indicesTimer);

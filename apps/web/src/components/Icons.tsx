@@ -13,4 +13,5 @@ export const ChevronIcon = (p: P) => (<svg {...base} {...p}><path d="m9 18 6-6-6
 export const StarIcon = ({ filled, ...p }: P & { filled?: boolean }) => (
   <svg {...base} fill={filled ? 'currentColor' : 'none'} {...p}><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z" /></svg>
 );
-export const CloseIcon = (p: P) => (<svg {...base} {...p}><path d="M18 6 6 18M6 6l12 12" /></svg>);
+export const BellIcon = (p: P) => (<svg {...base} {...p}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>);
+export const CloseIcon =(p: P) => (<svg {...base} {...p}><path d="M18 6 6 18M6 6l12 12" /></svg>);

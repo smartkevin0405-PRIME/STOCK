@@ -1,5 +1,6 @@
 import type {
   AccountView,
+  AlertKind,
   Candle,
   CandleInterval,
   Currency,
@@ -14,6 +15,7 @@ import type {
   Order,
   OrderSide,
   OrderType,
+  PriceAlert,
   Quote,
   RankingItem,
   RankingType,
@@ -57,6 +59,11 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export interface AlertsData {
+  alerts: PriceAlert[];
+  stocks: Record<string, StockInfo>;
+}
+
 export interface WatchlistData {
   groups: WatchGroup[];
   stocks: Record<string, StockInfo>;
@@ -92,6 +99,13 @@ export const api = {
   deleteWatchGroup: (id: number) => send<WatchlistData>('DELETE', `/api/watchlists/${id}`),
   addWatch: (id: number, code: string) => send<WatchlistData>('POST', `/api/watchlists/${id}/items`, { code }),
   removeWatch: (id: number, code: string) => send<WatchlistData>('DELETE', `/api/watchlists/${id}/items/${encodeURIComponent(code)}`),
+  alerts: () => get<AlertsData>('/api/alerts'),
+  createAlert: (a: { code: string; kind: AlertKind; value: number }) => send<AlertsData>('POST', '/api/alerts', a),
+  deleteAlert: (id: number) => send<AlertsData>('DELETE', `/api/alerts/${id}`),
+  pushInfo: () => get<{ enabled: boolean; publicKey: string | null; devices: number }>('/api/push'),
+  pushSubscribe: (sub: PushSubscriptionJSON) => send<{ devices: number }>('POST', '/api/push/subscribe', sub),
+  pushUnsubscribe: (endpoint: string) => send<{ devices: number }>('POST', '/api/push/unsubscribe', { endpoint }),
+  pushTest: () => send<{ sent: number }>('POST', '/api/push/test'),
   journal: () => get<{ entries: JournalEntry[]; stocks: Record<string, StockInfo> }>('/api/journal'),
   saveNote: (orderId: string, note: JournalNote) => send<{ note: JournalNote }>('PUT', `/api/journal/${orderId}`, note),
   exchange: (from: Currency, amount: number) => send<{ trade: FxTrade }>('POST', '/api/fx', { from, amount }),

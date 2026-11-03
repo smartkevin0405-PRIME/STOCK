@@ -338,7 +338,8 @@ export class TradingService {
         if (!quote || !this.isOpen(o.market, quote)) continue;
         // 예약주문은 장 시작 때 시장에 '들어오는' 주문 → 지금 가격으로 체결 가능
         const mode: FillMode = o.status === 'reserved' ? 'taker' : 'resting';
-        const fill = this.execute(o.id, quote, mode);
+        const stock = await this.provider.getStock(o.code);
+        const fill = this.execute(o.id, quote, mode, stock, true);
         // 예약주문이 장 시작에 안 닿았으면 일반 대기 주문으로 (거부된 주문은 그대로 둠)
         if (!fill && this.repo.order(o.id)?.status === 'reserved') {
           this.repo.updateOrder(o.id, { status: 'pending' }, this.now());
@@ -426,7 +427,7 @@ export class TradingService {
   }
 
   /** 체결 시도. 체결되면 잔고·보유 반영하고 Fill 반환 */
-  private execute(orderId: string, quote: Quote, mode: FillMode, stock?: StockInfo): Fill | null {
+  private execute(orderId: string, quote: Quote, mode: FillMode, stock?: StockInfo, background = false): Fill | null {
     const result = transaction<{ fill: Fill } | { rejected: Order } | null>(this.repo.db, () => {
       const order = this.repo.order(orderId);
       if (!order || (order.status !== 'pending' && order.status !== 'reserved')) return null;
@@ -458,7 +459,7 @@ export class TradingService {
       this.emit({ event: 'order', order: result.rejected, ...(stock ? { stock } : {}) });
       return null;
     }
-    this.emit({ event: 'fill', fill: result.fill, ...(stock ? { stock } : {}) });
+    this.emit({ event: 'fill', fill: result.fill, ...(stock ? { stock } : {}), ...(background ? { background } : {}) });
     return result.fill;
   }
 

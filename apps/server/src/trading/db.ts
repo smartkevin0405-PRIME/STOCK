@@ -109,6 +109,28 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (group_id, code)
   );
   `,
+  // v5: 가격 알림 + 폰 푸시 구독
+  `
+  CREATE TABLE alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL DEFAULT 1,
+    code TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    value REAL NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    triggered_at INTEGER,
+    triggered_price REAL
+  );
+  CREATE INDEX alerts_active ON alerts(active, code);
+  CREATE TABLE push_subscriptions (
+    endpoint TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL DEFAULT 1,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  `,
 ];
 
 /** DB 열기 + 스키마 맞추기. ':memory:'는 테스트용 */

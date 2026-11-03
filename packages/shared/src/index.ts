@@ -154,6 +154,20 @@ export interface AccountView {
   dayBase?: { day: string; totalKrw: number };
 }
 
+/** 가격 알림 조건: 이상·이하는 가격, 상승·하락은 전일 대비 % */
+export type AlertKind = 'above' | 'below' | 'rise' | 'fall';
+
+export interface PriceAlert {
+  id: number;
+  code: string;
+  kind: AlertKind;
+  value: number;
+  active: boolean;
+  createdAt: number;
+  triggeredAt?: number;
+  triggeredPrice?: number;
+}
+
 /** 관심종목 그룹 (codes 순서 = 화면 순서) */
 export interface WatchGroup {
   id: number;
@@ -186,7 +200,8 @@ export interface SeasonSummary {
 }
 
 export type AccountEvent =
-  | { event: 'fill'; fill: Fill; stock?: StockInfo }
+  /** background: 주문 직후가 아니라 나중에(대기·예약 주문) 체결됨 */
+  | { event: 'fill'; fill: Fill; stock?: StockInfo; background?: boolean }
   | { event: 'order'; order: Order; stock?: StockInfo }
   | { event: 'fx'; trade: FxTrade }
   | { event: 'reset'; season: number };
@@ -195,7 +210,8 @@ export type AccountEvent =
 export type ServerMessage =
   | { type: 'quote'; quote: Quote }
   | { type: 'indices'; indices: IndexQuote[] }
-  | ({ type: 'account' } & AccountEvent);
+  | ({ type: 'account' } & AccountEvent)
+  | { type: 'alert'; alert: PriceAlert; stock?: StockInfo };
 
 /** 웹 → 서버 WebSocket 메시지 */
 export type ClientMessage = { type: 'subscribe'; codes: string[] };

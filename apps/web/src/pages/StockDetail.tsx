@@ -3,7 +3,8 @@ import type { CandleInterval, OrderSide } from '@stock/shared';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Chart } from '../components/Chart';
-import { BackIcon, StarIcon } from '../components/Icons';
+import { AlertSheet } from '../components/AlertSheet';
+import { BackIcon, BellIcon, StarIcon } from '../components/Icons';
 import { Empty } from '../components/Layout';
 import { MyStock } from '../components/MyStock';
 import { OrderSheet } from '../components/OrderSheet';
@@ -33,6 +34,7 @@ export function StockDetail() {
   const [interval, setInterval] = useState<CandleInterval>('1d');
   const [orderSide, setOrderSide] = useState<OrderSide | null>(null);
   const [pickGroup, setPickGroup] = useState(false);
+  const [alertOpen, setAlertOpen] = useState(false);
 
   const { data, error } = useAsync(() => api.stock(code), [code]);
   const quote = useLiveQuote(data?.stock.code, data?.quote);
@@ -64,6 +66,10 @@ export function StockDetail() {
       <header className="sticky top-0 z-10 flex items-center justify-between bg-bg/95 px-3 pb-2 pt-[calc(env(safe-area-inset-top)+10px)] backdrop-blur">
         <button onClick={() => navigate(-1)} className="p-2" aria-label="뒤로">
           <BackIcon />
+        </button>
+        <div className="flex-1" />
+        <button onClick={() => setAlertOpen(true)} className="p-2 text-sub" aria-label="가격 알림">
+          <BellIcon />
         </button>
         <button
           onClick={() => {
@@ -137,6 +143,7 @@ export function StockDetail() {
       </div>
 
       {orderSide && <OrderSheet stock={stock} quote={quote} initialSide={orderSide} onClose={() => setOrderSide(null)} />}
+      {alertOpen && <AlertSheet stock={stock} quote={quote} onClose={() => setAlertOpen(false)} />}
 
       {pickGroup && (
         <div className="fixed inset-0 z-30 flex items-end bg-black/40" onClick={() => setPickGroup(false)}>
