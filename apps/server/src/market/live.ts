@@ -47,7 +47,7 @@ export class LiveProvider implements MarketDataProvider {
   private readonly quotes = new Map<string, Cached<Quote>>();
   private readonly candles = new Map<string, Cached<Candle[]>>();
   private readonly listeners = new Set<(q: Quote) => void>();
-  private watched = new Set<string>();
+  private readonly watchers = new Map<string, Set<string>>();
   private indices: Cached<IndexQuote[]> | undefined;
   private usdKrw: Cached<number> | undefined;
   private timers: ReturnType<typeof setInterval>[] = [];
@@ -86,8 +86,14 @@ export class LiveProvider implements MarketDataProvider {
     return { provider: 'live', KR: this.opts.sources.KR.status(), US: this.opts.sources.US.status() };
   }
 
-  watch(codes: Iterable<string>): void {
-    this.watched = new Set(codes);
+  watch(owner: string, codes: Iterable<string>): void {
+    this.watchers.set(owner, new Set(codes));
+  }
+
+  private get watched(): Set<string> {
+    const all = new Set<string>();
+    for (const set of this.watchers.values()) for (const c of set) all.add(c);
+    return all;
   }
 
   onQuote(listener: (q: Quote) => void): () => void {
@@ -172,13 +178,14 @@ export class LiveProvider implements MarketDataProvider {
 
   /** 화면에 보이는 종목 갱신 (테스트에서 직접 호출 가능) */
   async pollWatched(): Promise<void> {
-    if (this.polling || this.watched.size === 0) return;
+    const watched = this.watched;
+    if (this.polling || watched.size === 0) return;
     this.polling = true;
     try {
       // 장이 닫힌 시장은 가격이 거의 안 변하니 1분에 한 번만
       const now = this.o.now();
       const open: Record<Market, boolean> = { KR: isMarketOpen('KR', now), US: isMarketOpen('US', now) };
-      const due = [...this.watched].filter((code) => {
+      const due = [...watched].filter((code) => {
         const market = this.opts.directory.get(code)?.market;
         if (!market || open[market]) return true;
         const at = this.quotes.get(code)?.at ?? 0;

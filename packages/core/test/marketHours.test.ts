@@ -56,3 +56,16 @@ describe('미국 장 시간 (09:30~16:00 뉴욕, 서머타임 자동)', () => {
     expect(s.nextOpen).toBe(t('2026-11-27T14:30:00Z'));
   });
 });
+
+describe('주문 유효 시간 (당일 주문)', () => {
+  it('장중 주문은 오늘 마감까지', async () => {
+    const { sessionCloseAt } = await import('../src');
+    expect(sessionCloseAt('KR', t('2026-11-03T01:00:00Z'))).toBe(t('2026-11-03T06:30:00Z'));
+  });
+
+  it('장 끝난 뒤 주문은 다음 장 마감까지', async () => {
+    const { sessionCloseAt } = await import('../src');
+    expect(sessionCloseAt('KR', t('2026-11-06T07:00:00Z'))).toBe(t('2026-11-09T06:30:00Z'));
+    expect(sessionCloseAt('US', t('2026-11-03T03:00:00Z'))).toBe(t('2026-11-03T21:00:00Z'));
+  });
+});

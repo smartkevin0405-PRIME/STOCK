@@ -1,11 +1,13 @@
+import { Link } from 'react-router';
 import { Card, Page, Segmented, Soon } from '../components/Layout';
 import { ChevronIcon } from '../components/Icons';
 import { useTheme, type ThemeSetting } from '../lib/theme';
 import { sourceName, useDataStatus } from '../lib/status';
 
-const MENU = [
-  { label: '환전', milestone: 'M2' },
-  { label: '계좌 리셋 · 시즌 기록', milestone: 'M2' },
+const MENU: { label: string; to?: string; milestone?: string }[] = [
+  { label: '주문내역', to: '/orders' },
+  { label: '환전', to: '/fx' },
+  { label: '시즌 기록 · 계좌 리셋', to: '/seasons' },
   { label: '가격 알림', milestone: 'M3' },
   { label: '챌린지 · 업적', milestone: 'M5' },
   { label: '타임머신 리플레이', milestone: 'M5' },
@@ -18,15 +20,21 @@ export function More() {
   return (
     <Page title="더보기">
       <Card className="py-2">
-        {MENU.map((m) => (
-          <div key={m.label} className="flex items-center justify-between py-3">
-            <span className="font-medium">{m.label}</span>
-            <span className="flex items-center gap-1 text-sub">
-              <Soon milestone={m.milestone} />
-              <ChevronIcon width={18} height={18} />
-            </span>
-          </div>
-        ))}
+        {MENU.map((m) =>
+          m.to ? (
+            <Link key={m.label} to={m.to} className="flex items-center justify-between py-3">
+              <span className="font-medium">{m.label}</span>
+              <ChevronIcon width={18} height={18} className="text-sub" />
+            </Link>
+          ) : (
+            <div key={m.label} className="flex items-center justify-between py-3 text-sub">
+              <span className="font-medium">{m.label}</span>
+              <span className="flex items-center gap-1">
+                <Soon milestone={m.milestone!} />
+              </span>
+            </div>
+          ),
+        )}
       </Card>
 
       <Card className="space-y-4">

@@ -98,3 +98,13 @@ export function getMarketStatus(market: Market, now: number = Date.now()): Marke
 export function isMarketOpen(market: Market, now: number = Date.now()): boolean {
   return getMarketStatus(market, now).state === 'open';
 }
+
+/**
+ * 지금 주문하면 그 주문이 유효한 세션의 마감 시각.
+ * 장중이면 오늘 마감, 장 밖이면 다음 장의 마감 (당일 주문은 이때 자동 취소)
+ */
+export function sessionCloseAt(market: Market, now: number = Date.now()): number {
+  const s = getMarketStatus(market, now);
+  if (s.state === 'open' && s.closeAt) return s.closeAt;
+  return getMarketStatus(market, s.nextOpen).closeAt ?? s.nextOpen;
+}

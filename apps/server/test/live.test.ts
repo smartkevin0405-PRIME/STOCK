@@ -165,7 +165,7 @@ describe('실제 시세 공급자', () => {
     const { provider, kr } = setup();
     const got: string[] = [];
     provider.onQuote((q) => got.push(`${q.code}:${q.price}`));
-    provider.watch(['005930']);
+    provider.watch('screens', ['005930']);
 
     await provider.pollWatched();
     await provider.pollWatched(); // 가격 그대로 → 알림 없음
@@ -178,7 +178,7 @@ describe('실제 시세 공급자', () => {
 
   it('장이 닫힌 시장 종목은 1분에 한 번만', async () => {
     const { provider, kr, us, advance } = setup();
-    provider.watch(['005930', 'AAPL']);
+    provider.watch('screens', ['005930', 'AAPL']);
     await provider.pollWatched();
     advance(3_000);
     await provider.pollWatched();
@@ -196,6 +196,17 @@ describe('실제 시세 공급자', () => {
     expect(await provider.getStock('999999')).toMatchObject({ nameKo: '신규상장' });
     const [q] = await provider.getQuotes(['999999']);
     expect(q?.price).toBe(1_000); // 순위에서 받은 시세 재사용
+  });
+
+  it('여러 곳에서 등록한 종목을 합쳐서 조회', async () => {
+    const { provider, kr } = setup();
+    provider.watch('screens', ['005930']);
+    provider.watch('orders', ['000660']);
+    await provider.pollWatched();
+    expect(kr.calls).toEqual([['005930', '000660']]);
+    provider.watch('screens', []);
+    await provider.pollWatched();
+    expect(kr.calls[1]).toEqual(['000660']);
   });
 
   it('보이는 종목이 없으면 요청 안 함', async () => {

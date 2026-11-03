@@ -38,6 +38,8 @@ export interface Quote {
   timestamp: number;
   /** 지연 시세 여부 (분 단위) */
   delayMinutes?: number;
+  /** 시세 소스가 알려주는 장 상태 (예상 못 한 휴장 확인용) */
+  marketStatus?: 'open' | 'closed';
 }
 
 export type CandleInterval = '1m' | '5m' | '15m' | '60m' | '1d' | '1w' | '1M';
@@ -86,9 +88,17 @@ export interface Order {
   limitPrice?: number;
   status: OrderStatus;
   createdAt: number;
+  updatedAt?: number;
+  /** 매수 주문에 묶어둔 금액 (해당 통화) */
+  holdAmount?: number;
+  /** 이 시각까지 체결 안 되면 자동 취소 (당일 주문) */
+  expiresAt?: number;
+  /** 거부·취소 사유 */
+  reason?: string;
 }
 
 export interface Fill {
+  id?: number;
   orderId: string;
   code: string;
   side: OrderSide;
@@ -100,6 +110,8 @@ export interface Fill {
   tax: number;
   currency: Currency;
   executedAt: number;
+  /** 매도 실현손익 (수수료·세금 차감 후, 해당 통화) */
+  realizedPnl?: number;
 }
 
 export interface Position {
@@ -114,10 +126,53 @@ export interface Cash {
   USD: number;
 }
 
+export interface FxTrade {
+  id: number;
+  from: Currency;
+  to: Currency;
+  rate: number;
+  pay: number;
+  receive: number;
+  executedAt: number;
+}
+
+/** 내 계좌 (평가는 화면에서 실시간 시세로 계산) */
+export interface AccountView {
+  season: number;
+  seedKrw: number;
+  createdAt: number;
+  cash: Cash;
+  /** 주문가능금액 = 예수금 - 미체결 매수에 묶인 돈 */
+  available: Cash;
+  positions: Position[];
+  /** 종목별 판매 가능 수량 (미체결 매도 제외) */
+  sellable: Record<string, number>;
+  /** 이번 시즌 실현손익 (통화별) */
+  realizedPnl: Cash;
+  openOrders: number;
+}
+
+export interface SeasonSummary {
+  season: number;
+  seedKrw: number;
+  startedAt: number;
+  endedAt?: number;
+  /** 끝난 시즌의 최종 총자산 (원화 환산) */
+  finalKrw?: number;
+  trades: number;
+}
+
+export type AccountEvent =
+  | { event: 'fill'; fill: Fill; stock?: StockInfo }
+  | { event: 'order'; order: Order; stock?: StockInfo }
+  | { event: 'fx'; trade: FxTrade }
+  | { event: 'reset'; season: number };
+
 /** 서버 → 웹 WebSocket 메시지 */
 export type ServerMessage =
   | { type: 'quote'; quote: Quote }
-  | { type: 'indices'; indices: IndexQuote[] };
+  | { type: 'indices'; indices: IndexQuote[] }
+  | ({ type: 'account' } & AccountEvent);
 
 /** 웹 → 서버 WebSocket 메시지 */
 export type ClientMessage = { type: 'subscribe'; codes: string[] };

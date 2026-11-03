@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router';
 import { Chart } from '../components/Chart';
 import { BackIcon, StarIcon } from '../components/Icons';
 import { Empty } from '../components/Layout';
+import { MyStock } from '../components/MyStock';
 import { OrderSheet } from '../components/OrderSheet';
 import { StockLogo } from '../components/StockRow';
 import { api } from '../lib/api';
@@ -115,10 +116,7 @@ export function StockDetail() {
           </dl>
         </section>
 
-        <section className="rounded-2xl bg-card p-5">
-          <h2 className="mb-1 text-[17px] font-bold">내 주식</h2>
-          <p className="text-sm text-sub">보유하고 있지 않아요</p>
-        </section>
+        <MyStock stock={stock} quote={quote} />
       </main>
 
       <div className="fixed inset-x-0 bottom-0 z-20 bg-bg/95 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3 backdrop-blur">

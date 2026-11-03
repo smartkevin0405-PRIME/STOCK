@@ -19,8 +19,8 @@ export interface MarketDataProvider {
   getRankings(type: RankingType, market?: Market): Promise<RankingItem[]>;
   /** 원/달러 기준환율 */
   getUsdKrw(): Promise<number>;
-  /** 화면에 보이는 종목 (자주 갱신할 대상) */
-  watch(codes: Iterable<string>): void;
+  /** 자주 갱신할 종목. owner별로 따로 등록 (예: 'screens' 화면에 보이는 종목, 'orders' 미체결 주문) */
+  watch(owner: string, codes: Iterable<string>): void;
   /** 시세가 바뀔 때마다 호출. 반환값은 구독 해제 함수 */
   onQuote(listener: (quote: Quote) => void): () => void;
 }

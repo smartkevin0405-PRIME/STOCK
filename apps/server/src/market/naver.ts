@@ -25,6 +25,7 @@ interface NaverItem {
   accumulatedTradingVolume?: string;
   accumulatedTradingVolumeRaw?: string;
   localTradedAt?: string;
+  marketStatus?: string;
   stockExchangeType?: { name?: string; code?: string; delayTime?: number };
 }
 
@@ -78,6 +79,7 @@ export function parseNaverQuote(x: NaverItem, code: string): Quote | null {
     changeRate: prevClose > 0 ? change / prevClose : 0,
     timestamp: Number.isFinite(ts) ? ts : Date.now(),
     delayMinutes: x.stockExchangeType?.delayTime ?? 0,
+    ...(x.marketStatus === 'OPEN' ? { marketStatus: 'open' as const } : x.marketStatus === 'CLOSE' ? { marketStatus: 'closed' as const } : {}),
   };
 }
 

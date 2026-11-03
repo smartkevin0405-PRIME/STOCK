@@ -1,21 +1,27 @@
 import { useEffect } from 'react';
 import { HashRouter, Route, Routes, useLocation } from 'react-router';
 import { TabBar } from './components/Layout';
+import { Toaster } from './components/Toaster';
+import { handleAccountEvent } from './lib/notify';
 import { live } from './lib/live';
 import { useTheme } from './lib/theme';
 import { Discover } from './pages/Discover';
+import { Fx } from './pages/Fx';
 import { Home } from './pages/Home';
 import { Journal } from './pages/Journal';
 import { More } from './pages/More';
+import { Orders } from './pages/Orders';
+import { Seasons } from './pages/Seasons';
 import { StockDetail } from './pages/StockDetail';
 import { Watchlist } from './pages/Watchlist';
 
 function Shell() {
   useTheme();
   const { pathname } = useLocation();
-  const showTabs = !pathname.startsWith('/stock/');
+  const showTabs = !['/stock/', '/orders', '/fx', '/seasons'].some((p) => pathname.startsWith(p));
 
   useEffect(() => {
+    live.onAccountEvent(handleAccountEvent);
     live.connect();
   }, []);
   useEffect(() => {
@@ -31,8 +37,12 @@ function Shell() {
         <Route path="/journal" element={<Journal />} />
         <Route path="/more" element={<More />} />
         <Route path="/stock/:code" element={<StockDetail />} />
+        <Route path="/orders" element={<Orders />} />
+        <Route path="/fx" element={<Fx />} />
+        <Route path="/seasons" element={<Seasons />} />
       </Routes>
       {showTabs && <TabBar />}
+      <Toaster />
     </>
   );
 }

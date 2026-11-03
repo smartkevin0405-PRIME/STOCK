@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { NavLink } from 'react-router';
-import { BookIcon, HeartIcon, HomeIcon, MenuIcon, SearchIcon } from './Icons';
+import { NavLink, useNavigate } from 'react-router';
+import { BackIcon, BookIcon, HeartIcon, HomeIcon, MenuIcon, SearchIcon } from './Icons';
 
 const TABS = [
   { to: '/', label: '홈', Icon: HomeIcon },
@@ -97,6 +97,23 @@ export function Segmented<T extends string>({
           {o.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+/** 뒤로가기 있는 하위 화면 틀 */
+export function SubPage({ title, right, children }: { title: string; right?: ReactNode; children: ReactNode }) {
+  const navigate = useNavigate();
+  return (
+    <div className="mx-auto min-h-dvh max-w-[480px] pb-16">
+      <header className="sticky top-0 z-10 flex items-center gap-1 bg-bg/95 px-2 pb-2 pt-[calc(env(safe-area-inset-top)+10px)] backdrop-blur">
+        <button onClick={() => navigate(-1)} className="p-2" aria-label="뒤로">
+          <BackIcon />
+        </button>
+        <h1 className="flex-1 text-lg font-bold">{title}</h1>
+        {right}
+      </header>
+      <main className="space-y-3 px-4">{children}</main>
     </div>
   );
 }

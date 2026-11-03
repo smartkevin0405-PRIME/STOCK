@@ -1,4 +1,4 @@
-import type { IndexQuote, Quote, ServerMessage } from '@stock/shared';
+import type { AccountEvent, IndexQuote, Quote, ServerMessage } from '@stock/shared';
 import { useEffect, useSyncExternalStore } from 'react';
 import { API_BASE } from './api';
 
@@ -10,6 +10,8 @@ class LiveStore {
   private counts = new Map<string, number>();
   private ws: WebSocket | undefined;
   private pending = false;
+  private version = 0;
+  private accountHandler: ((e: AccountEvent) => void) | undefined;
   connected = false;
 
   subscribe = (listener: () => void) => {
@@ -20,6 +22,12 @@ class LiveStore {
   getQuote = (code: string) => this.quotes.get(code);
   getIndices = () => this.indices;
   getConnected = () => this.connected;
+  getVersion = () => this.version;
+
+  /** 체결·주문 알림 받을 곳 (계좌 화면 갱신, 토스트) */
+  onAccountEvent(handler: (e: AccountEvent) => void) {
+    this.accountHandler = handler;
+  }
 
   /** REST로 받은 시세 넣기 (더 최신 값이 있으면 무시) */
   seed(quote: Quote | null | undefined) {
@@ -61,6 +69,11 @@ class LiveStore {
       const msg = JSON.parse(String(e.data)) as ServerMessage;
       if (msg.type === 'quote') this.quotes.set(msg.quote.code, msg.quote);
       else if (msg.type === 'indices') this.indices = msg.indices;
+      else if (msg.type === 'account') {
+        const { type: _t, ...event } = msg;
+        this.accountHandler?.(event as AccountEvent);
+        return;
+      }
       this.emit();
     };
     ws.onclose = () => {
@@ -87,6 +100,7 @@ class LiveStore {
   }
 
   private emit() {
+    this.version++;
     for (const l of this.listeners) l();
   }
 }
@@ -109,4 +123,14 @@ export function useLiveIndices(): IndexQuote[] {
 
 export function useLiveConnected(): boolean {
   return useSyncExternalStore(live.subscribe, live.getConnected);
+}
+
+/** 시세가 바뀔 때마다 다시 그리기 (여러 종목을 한꺼번에 계산할 때) */
+export function useLiveVersion(): number {
+  return useSyncExternalStore(live.subscribe, live.getVersion);
+}
+
+/** 원/달러 환율 (지수 목록의 KRW=X) */
+export function useUsdKrw(): number | undefined {
+  return useLiveIndices().find((i) => i.symbol === 'KRW=X')?.price;
 }

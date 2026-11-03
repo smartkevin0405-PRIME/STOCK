@@ -1,10 +1,13 @@
 import { DEFAULT_CONFIG, getMarketStatus, priceLimits, roundToTick, tickSize, validateOrder } from '@stock/core';
 import type { OrderSide, OrderType, Quote, StockInfo } from '@stock/shared';
 import { useState, type ReactNode } from 'react';
-import { DEMO_ACCOUNT } from '../lib/account';
+import { account, useAccount } from '../lib/account';
+import { api } from '../lib/api';
 import { formatDateTime, formatMoney, formatNumberInput, formatPrice, parseNumberInput } from '../lib/format';
+import { describeFill } from '../lib/notify';
+import { toast } from '../lib/toast';
 import { CloseIcon } from './Icons';
-import { Segmented, Soon } from './Layout';
+import { Segmented } from './Layout';
 
 interface Props {
   stock: StockInfo;
@@ -15,24 +18,27 @@ interface Props {
 
 export function OrderSheet({ stock, quote, initialSide, onClose }: Props) {
   const market = stock.market;
+  const acct = useAccount();
   const [side, setSide] = useState<OrderSide>(initialSide);
   const [type, setType] = useState<OrderType>('limit');
   const [priceText, setPriceText] = useState(() => formatNumberInput(String(quote.price)));
   const [qtyText, setQtyText] = useState('1');
+  const [busy, setBusy] = useState(false);
+  const [serverError, setServerError] = useState<string>();
   const price = parseNumberInput(priceText);
   const qty = parseNumberInput(qtyText);
   const setPrice = (p: number) => setPriceText(formatNumberInput(String(p)));
   const setQty = (q: number) => setQtyText(formatNumberInput(String(q)));
 
-  const account = DEMO_ACCOUNT;
-  const position = account.positions[stock.code];
+  // 주문가능금액·판매가능수량은 서버가 미체결 주문까지 빼고 계산해서 줌
+  const cash = acct?.available ?? { KRW: 0, USD: 0 };
+  const held = acct?.positions.find((p) => p.code === stock.code);
+  const sellable = acct?.sellable[stock.code] ?? 0;
+  const position = held ? { ...held, qty: sellable } : undefined;
   const status = getMarketStatus(market);
   const limits = priceLimits(market, quote.prevClose);
 
-  const result = validateOrder(
-    { stock, side, type, qty, limitPrice: type === 'limit' ? price : undefined },
-    { quote, cash: account.cash, position },
-  );
+  const result = validateOrder({ stock, side, type, qty, limitPrice: type === 'limit' ? price : undefined }, { quote, cash, position });
   const estimate = result.estimate;
 
   const stepPrice = (dir: 1 | -1) => {
@@ -41,18 +47,36 @@ export function OrderSheet({ stock, quote, initialSide, onClose }: Props) {
   };
 
   const maxQty = () => {
-    if (side === 'sell') return position?.qty ?? 0;
+    if (side === 'sell') return sellable;
     const unit = (type === 'limit' ? price : quote.price) * (1 + DEFAULT_CONFIG.slippageRate);
     const rate = market === 'KR' ? DEFAULT_CONFIG.krCommissionRate : DEFAULT_CONFIG.usCommissionRate;
-    return Math.max(0, Math.floor(account.cash[stock.currency] / (unit * (1 + rate))));
+    return unit > 0 ? Math.max(0, Math.floor(cash[stock.currency] / (unit * (1 + rate)))) : 0;
+  };
+
+  const submit = async () => {
+    setBusy(true);
+    setServerError(undefined);
+    try {
+      const res = await api.placeOrder({ code: stock.code, side, type, qty, ...(type === 'limit' ? { limitPrice: price } : {}) });
+      if (res.fill) toast(describeFill(res.fill, stock), 'info', `fill:${res.order.id}`);
+      else if (res.order.status === 'reserved') toast(`예약주문 접수 · 다음 장 시작(${formatDateTime(status.nextOpen)})에 처리돼요`);
+      else toast('주문 접수 · 가격이 닿으면 체결돼요');
+      await account.refresh();
+      onClose();
+    } catch (e) {
+      setServerError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const accent = side === 'buy' ? 'bg-up' : 'bg-down';
+  const error = serverError ?? (!result.ok ? result.message : undefined);
 
   return (
     <div className="fixed inset-0 z-30 flex items-end bg-black/40" onClick={onClose}>
       <div
-        className="mx-auto w-full max-w-[480px] rounded-t-3xl bg-card px-5 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-5"
+        className="mx-auto max-h-[92dvh] w-full max-w-[480px] overflow-y-auto rounded-t-3xl bg-card px-5 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -65,7 +89,7 @@ export function OrderSheet({ stock, quote, initialSide, onClose }: Props) {
         </div>
 
         <div className="space-y-3">
-          <Segmented options={[{ value: 'buy', label: '구매' }, { value: 'sell', label: '판매' }] as const} value={side} onChange={setSide} />
+          <Segmented options={[{ value: 'buy', label: '구매' }, { value: 'sell', label: '판매' }] as const} value={side} onChange={(v) => { setSide(v); setServerError(undefined); }} />
           <Segmented size="sm" options={[{ value: 'limit', label: '지정가' }, { value: 'market', label: '시장가' }] as const} value={type} onChange={setType} />
 
           {type === 'limit' ? (
@@ -90,7 +114,7 @@ export function OrderSheet({ stock, quote, initialSide, onClose }: Props) {
             </p>
           )}
 
-          <Field label="수량" right={<button className="text-xs font-semibold text-brand" onClick={() => setQty(maxQty())}>최대 {maxQty()}주</button>}>
+          <Field label="수량" right={<button className="text-xs font-semibold text-brand" onClick={() => setQty(maxQty())}>최대 {maxQty().toLocaleString()}주</button>}>
             <Stepper onMinus={() => setQty(Math.max(1, qty - 1))} onPlus={() => setQty(qty + 1)}>
               <input
                 inputMode="numeric"
@@ -110,20 +134,24 @@ export function OrderSheet({ stock, quote, initialSide, onClose }: Props) {
               <Row k={side === 'buy' ? '총 필요 금액' : '받을 금액'} v={formatMoney(estimate.total, stock.currency)} strong />
               <Row
                 k={side === 'buy' ? '주문 가능' : '판매 가능'}
-                v={side === 'buy' ? formatMoney(account.cash[stock.currency], stock.currency) : `${position?.qty ?? 0}주`}
+                v={side === 'buy' ? formatMoney(cash[stock.currency], stock.currency) : `${sellable.toLocaleString()}주`}
               />
             </dl>
           )}
 
-          {!result.ok && <p className="text-sm font-medium text-up">{result.message}</p>}
+          {error && <p className="text-sm font-medium text-up">{error}</p>}
           {status.state === 'closed' && (
             <p className="text-xs text-sub">
               지금은 장이 닫혀 있어요. 주문하면 예약주문으로 저장돼서 다음 장 시작({formatDateTime(status.nextOpen)})에 처리돼요.
             </p>
           )}
 
-          <button disabled className={`flex w-full items-center justify-center gap-2 rounded-2xl py-4 font-bold text-white opacity-50 ${accent}`}>
-            {side === 'buy' ? '구매하기' : '판매하기'} <Soon milestone="M2에서 열려요" />
+          <button
+            disabled={!result.ok || busy || !acct}
+            onClick={submit}
+            className={`w-full rounded-2xl py-4 font-bold text-white transition disabled:opacity-40 ${accent}`}
+          >
+            {busy ? '주문 중…' : side === 'buy' ? '구매하기' : '판매하기'}
           </button>
         </div>
       </div>

@@ -8,6 +8,8 @@ import { MockProvider } from './market/mock';
 import { SEED_STOCKS } from './market/mockStocks';
 import { NaverSource, fetchNaverDirectory, fetchNaverRankings } from './market/naver';
 import type { MarketDataProvider } from './market/provider';
+import { openDb } from './trading/db';
+import { TradingService } from './trading/service';
 import { FallbackSource } from './market/sources';
 import { YahooSource } from './market/yahoo';
 
@@ -45,10 +47,13 @@ if (mode === 'mock') {
 }
 
 await provider.start();
-const app = await buildApp({ provider, logger: true });
+const trading = new TradingService({ db: openDb(join(dataDir, mode === 'mock' ? 'mock.db' : 'stock.db')), provider });
+trading.start();
+const app = await buildApp({ provider, trading, logger: true });
 await app.listen({ port, host });
 
 const shutdown = async () => {
+  trading.stop();
   provider.stop();
   store?.stop();
   await app.close();
