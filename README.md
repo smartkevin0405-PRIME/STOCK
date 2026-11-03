@@ -3,7 +3,7 @@
 한국·미국 실제 시세로 실전처럼 연습하는 주식 모의투자 앱 (웹 → 안드로이드 APK).
 
 - 기획서: [docs/PLAN.md](docs/PLAN.md)
-- 안드로이드 앱(APK)·앱 푸시: [docs/APK.md](docs/APK.md)
+- 안드로이드 앱(APK)·앱 푸시: [docs/APK.md](docs/APK.md) — 서버 없이 앱만으로도 쓸 수 있어요
 - 서버 배포: [docs/DEPLOY.md](docs/DEPLOY.md)
 - 진행 상황: **기획서 로드맵(M0~M5 + 선택 기능) 전부 구현**. 실제 서버 배포·폰 설치·키가 필요한 기능 확인은 남음
 

@@ -1,5 +1,4 @@
 import type { ServerMessage } from '@stock/shared';
-import type { DatabaseSync } from 'node:sqlite';
 import { registerAiRoutes } from '../../../server/src/ai/routes';
 import { createLiveProvider } from '../../../server/src/market/createLive';
 import { MockProvider } from '../../../server/src/market/mock';
@@ -27,8 +26,13 @@ import { openLocalDb } from './sqlDb';
  * 시세는 폰이 네이버·야후에서 직접 받고, 계좌는 기기 안 SQLite(IndexedDB 저장)에.
  */
 async function boot(mock: boolean) {
-  const store = idbStore('stock-local');
-  const db = (await openLocalDb({ load: () => store.load('db'), save: (bytes) => store.save('db', bytes) })) as unknown as DatabaseSync;
+  const dbFile = idbStore('db');
+  const local = await openLocalDb({ load: () => dbFile.load(), save: (bytes) => dbFile.save(bytes) });
+  const db = local.asDatabaseSync();
+  // 앱이 백그라운드로 가면 바로 저장
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') void local.flush().catch(() => undefined);
+  });
 
   let provider: MarketDataProvider;
   if (mock) {
@@ -36,13 +40,14 @@ async function boot(mock: boolean) {
   } else {
     const enc = new TextEncoder();
     const dec = new TextDecoder();
+    const stocksFile = idbStore('stocks');
     const live = createLiveProvider({
       storage: {
         read: async () => {
-          const bytes = await store.load('stocks');
+          const bytes = await stocksFile.load();
           return bytes ? dec.decode(bytes) : null;
         },
-        write: (text) => store.save('stocks', enc.encode(text)),
+        write: (text) => stocksFile.save(enc.encode(text)),
       },
     });
     await live.store.start();
