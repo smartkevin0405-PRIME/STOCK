@@ -68,12 +68,16 @@ export function usePortfolio(view: AccountData | undefined) {
   const totalPnlKrw = ev.totalKrw - view.seedKrw;
   // 오늘 수익 = 지금 총자산 - 오늘 오전 7시 총자산 (오늘 산 주식도 산 가격 기준으로 정확)
   const dayPnlKrw = view.dayBase ? ev.totalKrw - view.dayBase.totalKrw : undefined;
+  // 환율 변동 손익 = (지금 환율 - 달러 평균 매입 환율) × 가진 달러 자산 (현금 + 미국주식)
+  const usdAssets = view.cash.USD + ev.holdings.filter((h) => h.currency === 'USD').reduce((s, h) => s + h.value, 0);
+  const fxPnlKrw = view.avgUsdRate && usdAssets > 0 ? Math.round((rate - view.avgUsdRate) * usdAssets) : undefined;
   return {
     ...ev,
     usdKrw: rate,
     totalPnlKrw,
     totalReturnRate: totalPnlKrw / view.seedKrw,
     dayPnlKrw,
+    fxPnlKrw,
     dayReturnRate: dayPnlKrw !== undefined && view.dayBase ? dayPnlKrw / view.dayBase.totalKrw : undefined,
   };
 }

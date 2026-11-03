@@ -1,23 +1,20 @@
 import type { JournalEntry, JournalNote, StockInfo } from '@stock/shared';
 import { currencyOf } from '@stock/shared';
 import { useState } from 'react';
-import { Card, Empty, Page, SectionTitle, Soon } from '../components/Layout';
+import { CoachPanel } from '../components/CoachPanel';
+import { Card, Empty, Page, Segmented } from '../components/Layout';
 import { NoteEditor } from '../components/NoteEditor';
+import { StatsPanel } from '../components/StatsPanel';
+import { useStored } from '../lib/storage';
 import { useAccount } from '../lib/account';
 import { api } from '../lib/api';
 import { changeColor, formatMoney, formatPrice, formatSigned } from '../lib/format';
 import { toast } from '../lib/toast';
 import { useAsync } from '../lib/useAsync';
 
-const COACH = [
-  { title: '규칙 기반 코치', desc: '추격매수·손절·물타기·과매매 습관 분석' },
-  { title: 'AI에게 물어보기', desc: '내 매매 기록을 질문으로 정리해서 복사' },
-  { title: 'AI API 연동', desc: '키를 넣으면 앱 안에서 바로 리포트 (선택)' },
-];
-
 const dayLabel = (ms: number) => new Date(ms).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
 
-export function Journal() {
+function JournalList() {
   const acct = useAccount(); // 체결되면 다시 불러옴
   const [nonce, setNonce] = useState(0);
   const { data } = useAsync(() => api.journal(), [acct, nonce]);
@@ -36,7 +33,7 @@ export function Journal() {
   }
 
   return (
-    <Page title="일지">
+    <>
       {usedTags.length > 0 && (
         <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4">
           <TagChip active={!tag} onClick={() => setTag(undefined)}>
@@ -65,21 +62,28 @@ export function Journal() {
         ))
       )}
 
-      <Card>
-        <SectionTitle right={<Soon milestone="M3" />}>통계 · 수익 캘린더</SectionTitle>
-        <p className="text-sm text-sub">승률, 손익비, 최대 낙폭, 코스피·S&P500 대비 성과, 월별 수익 달력</p>
-      </Card>
-      <Card>
-        <SectionTitle right={<Soon milestone="M5" />}>투자 코치</SectionTitle>
-        <ul className="space-y-3">
-          {COACH.map((c) => (
-            <li key={c.title}>
-              <p className="font-semibold">{c.title}</p>
-              <p className="text-sm text-sub">{c.desc}</p>
-            </li>
-          ))}
-        </ul>
-      </Card>
+    </>
+  );
+}
+
+type Tab = 'journal' | 'stats' | 'coach';
+
+export function Journal() {
+  const [tab, setTab] = useStored<Tab>('journal-tab', 'journal');
+  return (
+    <Page title="일지">
+      <Segmented
+        options={[
+          { value: 'journal', label: '매매일지' },
+          { value: 'stats', label: '통계' },
+          { value: 'coach', label: '코치' },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+      {tab === 'journal' && <JournalList />}
+      {tab === 'stats' && <StatsPanel />}
+      {tab === 'coach' && <CoachPanel />}
     </Page>
   );
 }

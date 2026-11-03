@@ -60,6 +60,9 @@ export function Home() {
           <Link to="/fx" className="rounded-xl bg-soft px-3 py-2.5">
             <p className="text-sub">달러 주문가능</p>
             <p className="font-semibold">{acct ? formatMoney(acct.available.USD, 'USD') : '…'}</p>
+            {pf?.fxPnlKrw !== undefined && (
+              <p className={`text-xs ${changeColor(pf.fxPnlKrw)}`}>환율 {formatSigned(pf.fxPnlKrw, 'KRW')}원</p>
+            )}
           </Link>
         </div>
       </Card>

@@ -23,6 +23,7 @@ import type {
   StockInfo,
   WatchGroup,
 } from '@stock/shared';
+import type { CoachReport, DrawdownResult, TradeStats } from '@stock/core';
 
 export type { RankingType };
 
@@ -57,6 +58,27 @@ async function get<T>(path: string): Promise<T> {
     throw new Error(body.error ?? `요청 실패 (${res.status})`);
   }
   return res.json() as Promise<T>;
+}
+
+export type StatsPeriod = 'all' | 'month' | 'week';
+
+/** 서버 trading/stats.ts의 StatsView와 같은 모양 */
+export interface StatsView {
+  period: StatsPeriod;
+  from?: number;
+  trades: TradeStats;
+  /** 맨 끝은 지금 (day = 'now') */
+  equity: { day: string; totalKrw: number }[];
+  drawdown: DrawdownResult | null;
+  calendar: { day: string; pnlKrw: number }[];
+  tax: { year: number; usRealizedKrw: number; deductionKrw: number; taxableKrw: number; estimatedTaxKrw: number };
+  usdKrw: number;
+}
+
+export interface CoachView {
+  report: CoachReport;
+  concentration: { code: string; weight: number; triggered: boolean } | null;
+  stopLossRate?: number;
 }
 
 export interface AlertsData {
@@ -106,6 +128,11 @@ export const api = {
   pushSubscribe: (sub: PushSubscriptionJSON) => send<{ devices: number }>('POST', '/api/push/subscribe', sub),
   pushUnsubscribe: (endpoint: string) => send<{ devices: number }>('POST', '/api/push/unsubscribe', { endpoint }),
   pushTest: () => send<{ sent: number }>('POST', '/api/push/test'),
+  stats: (period: StatsPeriod) => get<StatsView>(`/api/stats?period=${period}`),
+  benchmarks: (from: number) => get<{ series: { symbol: string; name: string; candles: Candle[] }[] }>(`/api/benchmarks?from=${from}`),
+  coach: () => get<CoachView>('/api/coach'),
+  settings: () => get<{ stopLossRate: number | null }>('/api/settings'),
+  saveSettings: (s: { stopLossRate: number | null }) => send<{ stopLossRate: number | null }>('PUT', '/api/settings', s),
   journal: () => get<{ entries: JournalEntry[]; stocks: Record<string, StockInfo> }>('/api/journal'),
   saveNote: (orderId: string, note: JournalNote) => send<{ note: JournalNote }>('PUT', `/api/journal/${orderId}`, note),
   exchange: (from: Currency, amount: number) => send<{ trade: FxTrade }>('POST', '/api/fx', { from, amount }),
