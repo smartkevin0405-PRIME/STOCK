@@ -141,7 +141,7 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (user_id, key)
   );
   `,
-  // 배당·액면분할 반영 기록 (같은 이벤트 두 번 반영 방지)
+  // v7: 배당·액면분할 반영 기록 (같은 이벤트 두 번 반영 방지)
   `
   CREATE TABLE corporate_actions (
     account_id INTEGER NOT NULL,
@@ -151,6 +151,15 @@ const MIGRATIONS: string[] = [
     value REAL NOT NULL,
     applied_at INTEGER NOT NULL,
     PRIMARY KEY (account_id, code, kind, ex_date)
+  );
+  `,
+  // v8: 업적
+  `
+  CREATE TABLE achievements (
+    user_id INTEGER NOT NULL DEFAULT 1,
+    achievement_id TEXT NOT NULL,
+    unlocked_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, achievement_id)
   );
   `,
 ];

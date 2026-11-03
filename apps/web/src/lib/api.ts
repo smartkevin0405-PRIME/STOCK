@@ -1,5 +1,6 @@
 import type {
   AccountView,
+  AchievementsView,
   AlertKind,
   Candle,
   CandleInterval,
@@ -137,6 +138,7 @@ export const api = {
   saveNote: (orderId: string, note: JournalNote) => send<{ note: JournalNote }>('PUT', `/api/journal/${orderId}`, note),
   exchange: (from: Currency, amount: number) => send<{ trade: FxTrade }>('POST', '/api/fx', { from, amount }),
   fxTrades: () => get<{ trades: FxTrade[] }>('/api/fx/trades'),
+  achievements: () => get<AchievementsView>('/api/achievements'),
   rankings: (type: RankingType, market?: Market) =>
     get<{ items: RankingItem[] }>(`/api/rankings?type=${type}${market ? `&market=${market}` : ''}`),
 };

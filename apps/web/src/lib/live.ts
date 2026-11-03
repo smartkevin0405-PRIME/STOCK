@@ -3,6 +3,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { API_BASE } from './api';
 
 export type AlertMessage = Extract<ServerMessage, { type: 'alert' }>;
+export type AchievementMessage = Extract<ServerMessage, { type: 'achievement' }>;
 
 /** 실시간 시세 저장소: WebSocket 하나로 화면에 보이는 종목만 구독 */
 class LiveStore {
@@ -15,6 +16,7 @@ class LiveStore {
   private version = 0;
   private accountHandler: ((e: AccountEvent) => void) | undefined;
   private alertHandler: ((m: AlertMessage) => void) | undefined;
+  private achievementHandler: ((m: AchievementMessage) => void) | undefined;
   connected = false;
 
   subscribe = (listener: () => void) => {
@@ -35,6 +37,11 @@ class LiveStore {
   /** 가격 알림이 울렸을 때 (앱이 켜져 있으면 화면에도) */
   onAlert(handler: (m: AlertMessage) => void) {
     this.alertHandler = handler;
+  }
+
+  /** 업적·챌린지를 새로 달성했을 때 */
+  onAchievement(handler: (m: AchievementMessage) => void) {
+    this.achievementHandler = handler;
   }
 
   /** REST로 받은 시세 넣기 (더 최신 값이 있으면 무시) */
@@ -83,6 +90,9 @@ class LiveStore {
         return;
       } else if (msg.type === 'alert') {
         this.alertHandler?.(msg);
+        return;
+      } else if (msg.type === 'achievement') {
+        this.achievementHandler?.(msg);
         return;
       }
       this.emit();
