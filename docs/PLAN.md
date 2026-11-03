@@ -136,7 +136,7 @@
 **MVP에서 단순화하는 것** (나중에 추가 가능)
 - 부분 체결 없음 (전량 체결)
 - 시간외 거래, 넥스트레이드(NXT), 미국 프리/애프터마켓 미지원
-- 배당·액면분할 반영은 2단계
+- 배당·액면분할: 6시간마다 야후 이벤트 확인 → 배당은 배당락 전 보유 수량 × 주당 배당금 - 세금(국내 15.4%, 미국 15%), 분할은 수량·평균단가 조정 + 자투리 현금 정산 + 미체결 취소
 
 ---
 
@@ -216,25 +216,26 @@ docs/           기획·설계 문서
 
 ---
 
-## 6. 데이터 모델 (요약)
+## 6. 데이터 모델 (실제 테이블, apps/server/src/trading/db.ts)
 
 ```
-users            id, name, password_hash
-accounts         id, user_id, season, cash_krw, cash_usd, created_at, reset_at
-stocks           code, market(KR/US), exchange, name_ko, name_en, aliases, ...
-positions        account_id, stock_code, qty, avg_price, currency
-orders           id, account_id, stock_code, side, type(market/limit), price, qty,
-                 status(pending/reserved/filled/cancelled/rejected), created_at
-executions       order_id, price, qty, fee, tax, executed_at
-fx_trades        account_id, from_ccy, to_ccy, rate, amount, executed_at
-watchlists       user_id, group_name, stock_code, sort_order
-alerts           user_id, stock_code, condition, value, active, triggered_at
-journal_entries  execution_id, reason, tags, emotion, created_at
-daily_snapshots  account_id, date, total_value_krw, cash, holdings_value
-settings         user_id, data_source, api_keys(암호화), fee_rates, ...
--- 2단계
-coach_reports, achievements, challenges, replay_sessions
+accounts           시즌별 계좌: season, seed_krw, cash_krw, cash_usd, closed_at, final_value_krw
+positions          account_id, code, qty, avg_price, currency
+orders             id, account_id, code, side, type, qty, limit_price, status, hold_amount, reason, expires_at
+fills              order_id, price, qty, amount, commission, tax, realized_pnl, day_change_rate
+fx_trades          from_ccy, to_ccy, rate, pay, receive
+daily_snapshots    account_id, day(오전 7시 기준), total_krw, stock_krw, cash, usd_krw
+journal_notes      order_id, text, tags
+settings           user_id, key, value (손절 원칙 등)
+watch_groups/items 관심종목 그룹 (시즌과 무관)
+alerts             code, kind(above/below/rise/fall), value, active, triggered_at
+push_subscriptions 웹 푸시 / fcm_tokens 앱 푸시
+corporate_actions  배당·분할 반영 기록
+achievements       업적·월간 챌린지 달성 기록
+replay_results     리플레이 결과
 ```
+
+모든 테이블에 user_id(또는 account → user)가 있어서 나중에 여러 사용자로 확장 가능.
 
 ---
 
@@ -245,10 +246,11 @@ coach_reports, achievements, challenges, replay_sessions
 | **M0 뼈대** ✅ | 모노레포, 가짜 시세(Mock), 기본 화면 틀, 매매 규칙 엔진 + 테스트 | 가짜 시세로 돌아가는 화면 |
 | **M1 시세** ✅ | 네이버·야후 연동, 자동 전환, 전체 종목 목록, 차트, 순위, 지수·환율 | 진짜 시세 보이는 앱 |
 | **M2 매매** ✅ | 주문/체결 엔진, 수수료·세금, 환전, 포트폴리오, 리셋 | 모의투자 가능 |
-| **M3 관리** | 관심종목, 알림+웹 푸시, 매매일지, 통계, 수익 캘린더, 오늘 수익(하루 시작 자산 기록) | **MVP 완성** |
-| **M4 배포** | 로그인, 클라우드 배포, Capacitor APK, FCM 푸시 | 폰에 설치 |
-| **M5 차별화** | 규칙 기반 코치, AI에게 물어보기, 챌린지/업적, 타임머신 리플레이 | 2단계 완성 |
-| **선택** | 한투 API 연동(실시간·호가), AI API 연동 | 키 있을 때만 |
+| **M3 관리** ✅ | 관심종목, 알림+웹 푸시, 매매일지, 통계, 수익 캘린더, 오늘 수익(하루 시작 자산 기록) | **MVP 완성** |
+| **M4 배포** ✅ | 로그인, 배포 설정(Docker·Caddy·가이드), Capacitor APK(GitHub Actions 빌드), FCM 푸시 | 폰에 설치 (실제 배포는 사용자 계정 필요) |
+| **M5 차별화** ✅ | 규칙 기반 코치, AI에게 물어보기, 챌린지/업적, 타임머신 리플레이 | 2단계 완성 |
+| **선택** ✅ | 한투 API 연동(실시간·호가), AI API 연동 | 키 있을 때만 (실제 키로는 아직 미확인) |
+| **2단계 잔여** ✅ | 배당·액면분할 반영, 미국 양도세 예상, 이동평균 120, 환율 손익, 설정 화면 | |
 
 ---
 
@@ -257,7 +259,8 @@ coach_reports, achievements, challenges, replay_sessions
 | 언제 | 준비할 것 | 필수? |
 |---|---|---|
 | M0~M3 | 없음 | — |
-| M4 전 | 클라우드 계정 (Oracle Cloud 등), Firebase 프로젝트(APK 푸시용) | 필수 |
+| 배포할 때 | 클라우드 계정 (Oracle Cloud 등), 무료 도메인(DuckDNS 등), `APP_PASSWORD` — [DEPLOY.md](DEPLOY.md) | 필수 |
+| 앱 푸시 | Firebase 프로젝트 (`google-services.json` + 서비스 계정) — [APK.md](APK.md) | 앱 푸시 쓸 때만 |
 | 선택 | 한국투자증권 KIS Developers 앱키·시크릿 (실시간 시세·호가) | 선택 |
 | 선택 | AI API 키 (앱 안에서 AI 리포트, 사용량만큼 과금) | 선택 |
 
@@ -266,6 +269,7 @@ coach_reports, achievements, challenges, replay_sessions
 ## 9. 아직 안 정한 것
 
 - 앱 이름
-- 휴장일 확인: KRX 공식 목록은 해외 접속이 막혀 있음 → M2에서 네이버 시세의 장 상태(OPEN/CLOSE)로 실제 장 여부를 교차 확인
+- 휴장일: 2026~2027 목록 검증 완료 + 네이버 장 상태(OPEN/CLOSE)로 교차 확인. 2028년부터는 매년 목록 추가 필요
+- 리플레이 진행 중 저장 (지금은 화면을 나가면 사라짐)
 - 시간외/NXT/미국 프리·애프터마켓 지원 여부 (MVP 이후)
 - 한투 연동 시 실전 키 vs 모의투자 키 (키 생기면 테스트 후 결정)

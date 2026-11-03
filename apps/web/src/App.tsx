@@ -26,10 +26,11 @@ import { Replay } from './pages/Replay';
 import { ReplayPlay } from './pages/ReplayPlay';
 import { Seasons } from './pages/Seasons';
 import { ServerSetup, ServerSetupFirst } from './pages/ServerSetup';
+import { Settings } from './pages/Settings';
 import { StockDetail } from './pages/StockDetail';
 import { Watchlist } from './pages/Watchlist';
 
-const SUB_PAGES = ['/stock/', '/orders', '/fx', '/seasons', '/alerts', '/achievements', '/replay', '/server'];
+const SUB_PAGES = ['/stock/', '/orders', '/fx', '/seasons', '/alerts', '/achievements', '/replay', '/server', '/settings'];
 
 function Shell() {
   useTheme();
@@ -65,6 +66,7 @@ function Shell() {
         <Route path="/replay" element={<Replay />} />
         <Route path="/replay/:id" element={<ReplayPlay />} />
         <Route path="/server" element={<ServerSetup />} />
+        <Route path="/settings" element={<Settings />} />
       </Routes>
       {showTabs && <TabBar />}
       <Toaster />
