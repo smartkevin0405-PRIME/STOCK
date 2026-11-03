@@ -3,7 +3,8 @@ import { Link } from 'react-router';
 import { ChevronIcon } from '../components/Icons';
 import { Card, Empty, SectionTitle, SubPage } from '../components/Layout';
 import { changeColor, formatMoney, formatRate } from '../lib/format';
-import { dotDate, replayApi } from '../lib/replay';
+import { dotDate, replayApi, replayDateText } from '../lib/replay';
+import { savedReplayTime } from '../lib/replayProgress';
 import { useAsync } from '../lib/useAsync';
 
 const day = (ms: number) => new Date(ms).toLocaleDateString('ko-KR', { year: '2-digit', month: 'numeric', day: 'numeric' });
@@ -61,11 +62,17 @@ export function Replay() {
 }
 
 function ScenarioCard({ s, names, best }: { s: ReplayScenario; names: string[]; best?: ReplayResult }) {
+  const saved = savedReplayTime(s.id);
   return (
     <Link to={`/replay/${s.id}`} className="block rounded-2xl bg-card p-5 active:opacity-80">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <p className="font-bold">{s.title}</p>
-        <ChevronIcon width={18} height={18} className="text-sub" />
+        <span className="flex items-center gap-1">
+          {saved !== undefined && (
+            <span className="rounded-md bg-brand/10 px-1.5 py-0.5 text-xs font-semibold text-brand">이어하기 · {replayDateText(saved, false)}</span>
+          )}
+          <ChevronIcon width={18} height={18} className="text-sub" />
+        </span>
       </div>
       <p className="mt-0.5 text-xs text-sub">
         {dotDate(s.start)} ~ {dotDate(s.end)} · 시작 {formatMoney(s.startCash, s.currency)}

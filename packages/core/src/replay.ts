@@ -194,3 +194,46 @@ export function valueReplayAccount(account: ReplayAccount, histories: Record<str
   const total = roundMoney(account.cash + stockValue, account.currency, 'round');
   return { stockValue, total, returnRate: account.startCash > 0 ? (total - account.startCash) / account.startCash : 0 };
 }
+
+// ── 진행 저장 (화면을 나갔다 와도 이어하기) ──
+
+export interface ReplayProgress {
+  v: 1;
+  scenarioId: string;
+  /** 지금 날짜 (일봉 time, epoch 초) */
+  time: number;
+  code: string;
+  account: ReplayAccount;
+  savedAt: number;
+}
+
+export function makeReplayProgress(scenarioId: string, time: number, code: string, account: ReplayAccount, savedAt: number): ReplayProgress {
+  return { v: 1, scenarioId, time, code, account, savedAt };
+}
+
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/**
+ * 저장된 진행을 검사해서 되살림. 형식이 다르거나, 다른 시나리오거나, 날짜가 없으면 null.
+ * days: 이번에 불러온 재생 날짜들 → 저장된 날짜(또는 그 직전 날) 위치로 맞춤
+ */
+export function restoreReplayProgress(
+  raw: unknown,
+  scenarioId: string,
+  days: readonly number[],
+  codes: readonly string[],
+): { dayIdx: number; code: string; account: ReplayAccount } | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const p = raw as Partial<ReplayProgress>;
+  if (p.v !== 1 || p.scenarioId !== scenarioId || !isNum(p.time) || typeof p.code !== 'string') return null;
+  const a = p.account as Partial<ReplayAccount> | undefined;
+  if (!a || !isNum(a.cash) || !isNum(a.startCash) || !a.positions || typeof a.positions !== 'object' || !Array.isArray(a.trades)) return null;
+  for (const pos of Object.values(a.positions)) {
+    if (!pos || !isNum(pos.qty) || !isNum(pos.avgPrice) || pos.qty <= 0) return null;
+  }
+  // 저장된 날 이하 중 가장 늦은 날
+  let dayIdx = -1;
+  for (let i = 0; i < days.length; i++) if (days[i]! <= p.time) dayIdx = i;
+  if (dayIdx < 0) return null;
+  return { dayIdx, code: codes.includes(p.code) ? p.code : (codes[0] ?? p.code), account: a as ReplayAccount };
+}

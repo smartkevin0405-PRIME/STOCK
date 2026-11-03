@@ -111,3 +111,28 @@ describe('리플레이 평가', () => {
     expect(crash.returnRate).toBeCloseTo(-0.0401105);
   });
 });
+
+describe('리플레이 진행 저장', () => {
+  it('저장 → 되살리기 (같은 시나리오, 같은 날짜)', async () => {
+    const { makeReplayProgress, restoreReplayProgress, createReplayAccount } = await import('../src');
+    const acc = { ...createReplayAccount('KR', 10_000_000), cash: 9_000_000, positions: { '005930': { code: '005930', qty: 10, avgPrice: 100_000, currency: 'KRW' as const } } };
+    const saved = JSON.parse(JSON.stringify(makeReplayProgress('covid-2020-kr', 300, '005930', acc, 1)));
+    expect(restoreReplayProgress(saved, 'covid-2020-kr', [100, 200, 300, 400], ['005930', '000660'])).toEqual({ dayIdx: 2, code: '005930', account: acc });
+  });
+
+  it('저장된 날이 없으면 그 직전 날로, 종목이 빠졌으면 첫 종목으로', async () => {
+    const { makeReplayProgress, restoreReplayProgress, createReplayAccount } = await import('../src');
+    const saved = makeReplayProgress('s', 250, 'GONE', createReplayAccount('US', 10_000), 1);
+    expect(restoreReplayProgress(saved, 's', [100, 200, 300], ['AAPL'])).toMatchObject({ dayIdx: 1, code: 'AAPL' });
+  });
+
+  it('형식이 이상하거나 다른 시나리오면 무시', async () => {
+    const { makeReplayProgress, restoreReplayProgress, createReplayAccount } = await import('../src');
+    const ok = makeReplayProgress('s', 200, 'A', createReplayAccount('KR', 1), 1);
+    expect(restoreReplayProgress(ok, 'other', [200], ['A'])).toBeNull();
+    expect(restoreReplayProgress({ ...ok, v: 2 }, 's', [200], ['A'])).toBeNull();
+    expect(restoreReplayProgress({ ...ok, account: { cash: 'x' } }, 's', [200], ['A'])).toBeNull();
+    expect(restoreReplayProgress(ok, 's', [300], ['A'])).toBeNull();
+    expect(restoreReplayProgress('garbage', 's', [200], ['A'])).toBeNull();
+  });
+});

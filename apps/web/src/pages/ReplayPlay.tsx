@@ -1,6 +1,8 @@
 import {
   closeAt,
   createReplayAccount,
+  makeReplayProgress,
+  restoreReplayProgress,
   replayDayTime,
   replayOrder,
   replayTimeline,
@@ -18,6 +20,7 @@ import { ReplayOrderSheet } from '../components/ReplayOrderSheet';
 import { StockLogo } from '../components/StockRow';
 import { changeColor, formatMoney, formatPrice, formatRate, formatSigned } from '../lib/format';
 import { replayApi, replayDateText, scenarioRange } from '../lib/replay';
+import { clearReplayProgress, loadReplayProgress, saveReplayProgress } from '../lib/replayProgress';
 import { useStored } from '../lib/storage';
 import { useTheme } from '../lib/theme';
 import { toast } from '../lib/toast';
@@ -97,9 +100,32 @@ function Player({ data }: { data: Loaded }) {
   const [sheet, setSheet] = useState<OrderSide | null>(null);
   const [saveState, setSaveState] = useState<'saving' | 'saved' | 'error'>();
   const savedRound = useRef(-1);
+  /** '여기서 끝내기'를 눌렀는지 */
+  const [endedEarly, setEndedEarly] = useState(false);
+  /** 저장된 진행이 있으면 이어할지 물어봄 */
+  const [resume, setResume] = useState(() => restoreReplayProgress(loadReplayProgress(scenario.id), scenario.id, days, codes));
 
   const time = days[dayIdx]!;
-  const finished = dayIdx >= last;
+  const finished = dayIdx >= last || endedEarly;
+
+  // 진행 자동 저장 (날짜가 넘어가거나 매매할 때마다). 아직 이어할지 고르는 중이면 덮어쓰지 않음
+  useEffect(() => {
+    if (resume || finished) return;
+    if (dayIdx === 0 && account.trades.length === 0) return;
+    saveReplayProgress(makeReplayProgress(scenario.id, time, code, account, Date.now()));
+  }, [resume, finished, dayIdx, account, code, time, scenario.id]);
+
+  const continueSaved = () => {
+    if (!resume) return;
+    setDayIdx(resume.dayIdx);
+    setAccount(resume.account);
+    setCode(resume.code);
+    setResume(null);
+  };
+  const discardSaved = () => {
+    clearReplayProgress(scenario.id);
+    setResume(null);
+  };
   const stock = stocks[code];
   const value = valueReplayAccount(account, histories, time);
   const visible = useMemo(() => visibleCandles(histories[code] ?? [], time), [histories, code, time]);
@@ -122,6 +148,7 @@ function Player({ data }: { data: Loaded }) {
   useEffect(() => {
     if (!finished || savedRound.current === round) return;
     savedRound.current = round;
+    clearReplayProgress(scenario.id);
     setSaveState('saving');
     replayApi
       .saveResult({
@@ -142,6 +169,8 @@ function Player({ data }: { data: Loaded }) {
   }, [finished, round]);
 
   const restart = () => {
+    clearReplayProgress(scenario.id);
+    setEndedEarly(false);
     setPlaying(false);
     setDayIdx(0);
     setAccount(createReplayAccount(scenario.market, scenario.startCash));
@@ -168,6 +197,23 @@ function Player({ data }: { data: Loaded }) {
 
   return (
     <SubPage title={scenario.title}>
+      {resume && (
+        <Card className="space-y-3 border-2 border-brand/40">
+          <p className="font-semibold">하던 리플레이가 있어요</p>
+          <p className="text-sm text-sub">
+            {replayDateText(days[resume.dayIdx]!)}까지 진행 · 거래 {resume.account.trades.length}회
+          </p>
+          <div className="flex gap-2">
+            <button onClick={discardSaved} className="flex-1 rounded-xl bg-soft py-3 font-semibold">
+              처음부터
+            </button>
+            <button onClick={continueSaved} className="flex-1 rounded-xl bg-brand py-3 font-semibold text-white">
+              이어하기
+            </button>
+          </div>
+        </Card>
+      )}
+
       {/* 날짜·재생 */}
       <Card className="space-y-3">
         <div className="flex items-end justify-between">
@@ -186,14 +232,14 @@ function Player({ data }: { data: Loaded }) {
         </div>
         <div className="flex items-center gap-2">
           <button
-            disabled={finished}
+            disabled={finished || !!resume}
             onClick={() => setPlaying(!playing)}
             className="w-24 rounded-xl bg-brand py-2.5 text-sm font-bold text-white disabled:opacity-40"
           >
             {playing ? '❚❚ 멈춤' : '▶ 재생'}
           </button>
           <button
-            disabled={finished}
+            disabled={finished || !!resume}
             onClick={() => setDayIdx((i) => Math.min(i + 1, last))}
             className="rounded-xl bg-soft px-3 py-2.5 text-sm font-semibold disabled:opacity-40"
           >
@@ -212,6 +258,17 @@ function Player({ data }: { data: Loaded }) {
             />
           </div>
         </div>
+        {!finished && !resume && dayIdx > 0 && (
+          <button
+            onClick={() => {
+              setPlaying(false);
+              setEndedEarly(true);
+            }}
+            className="w-full text-center text-xs font-medium text-sub"
+          >
+            여기서 끝내기 ({replayDateText(time, false)} 기준으로 결과 저장)
+          </button>
+        )}
       </Card>
 
       {/* 자산 */}
@@ -235,7 +292,18 @@ function Player({ data }: { data: Loaded }) {
         </div>
       </Card>
 
-      {finished && <ResultCard data={data} account={account} total={value.total} rate={value.returnRate} saveState={saveState} onRestart={restart} onList={() => navigate('/replay')} />}
+      {finished && (
+        <ResultCard
+          data={data}
+          account={account}
+          total={value.total}
+          rate={value.returnRate}
+          endTime={time}
+          saveState={saveState}
+          onRestart={restart}
+          onList={() => navigate('/replay')}
+        />
+      )}
 
       {/* 종목 탭 */}
       <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
@@ -334,7 +402,7 @@ function Player({ data }: { data: Loaded }) {
 
       <div className="h-20" />
 
-      {!finished && (
+      {!finished && !resume && (
         <div className="fixed inset-x-0 bottom-0 z-20 bg-bg/95 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3 backdrop-blur">
           <div className="mx-auto flex max-w-[480px] gap-2 px-4">
             <button disabled={close === undefined} onClick={() => openSheet('sell')} className="flex-1 rounded-2xl bg-down py-4 font-bold text-white disabled:opacity-40">
@@ -367,6 +435,8 @@ function ResultCard(p: {
   account: ReplayAccount;
   total: number;
   rate: number;
+  /** 끝난 날 (중간에 끝내면 그날) */
+  endTime: number;
   saveState?: 'saving' | 'saved' | 'error';
   onRestart: () => void;
   onList: () => void;
@@ -374,7 +444,7 @@ function ResultCard(p: {
   const { scenario, codes, stocks, histories, days } = p.data;
   const ccy = scenario.currency;
   const first = days[0]!;
-  const end = days[days.length - 1]!;
+  const end = p.endTime;
   // 같은 기간 그냥 들고만 있었다면 (종목별 등락)
   const holds = codes.flatMap((c) => {
     const a = closeAt(histories[c] ?? [], first);
@@ -386,7 +456,9 @@ function ResultCard(p: {
   return (
     <Card className="space-y-3 border-2 border-brand/40">
       <div>
-        <p className="text-sm font-semibold text-brand">리플레이 끝!</p>
+        <p className="text-sm font-semibold text-brand">
+          리플레이 끝! {end < days[days.length - 1]! && <span className="font-normal text-sub">({replayDateText(end, false)}에 끝냄)</span>}
+        </p>
         <p className={`text-[30px] font-bold ${changeColor(p.rate)}`} data-testid="replay-result-rate">
           {formatRate(p.rate)}
         </p>
