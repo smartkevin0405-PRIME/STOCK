@@ -7,6 +7,8 @@ import type {
   Fill,
   FxTrade,
   IndexQuote,
+  JournalEntry,
+  JournalNote,
   Market,
   MarketStatus,
   Order,
@@ -73,11 +75,13 @@ export const api = {
   resetAccount: () => send<AccountView>('POST', '/api/account/reset'),
   seasons: () => get<{ seasons: SeasonSummary[] }>('/api/seasons'),
   orders: (status: 'open' | 'all' = 'all') => get<{ orders: Order[]; stocks: Record<string, StockInfo> }>(`/api/orders?status=${status}`),
-  placeOrder: (o: { code: string; side: OrderSide; type: OrderType; qty: number; limitPrice?: number }) =>
+  placeOrder: (o: { code: string; side: OrderSide; type: OrderType; qty: number; limitPrice?: number; note?: JournalNote }) =>
     send<{ order: Order; fill?: Fill }>('POST', '/api/orders', o),
   cancelOrder: (id: string) => send<{ order: Order }>('POST', `/api/orders/${id}/cancel`),
   amendOrder: (id: string, patch: { qty?: number; limitPrice?: number }) => send<{ order: Order }>('PATCH', `/api/orders/${id}`, patch),
   fills: (code?: string) => get<{ fills: Fill[]; stocks: Record<string, StockInfo> }>(`/api/fills${code ? `?code=${encodeURIComponent(code)}` : ''}`),
+  journal: () => get<{ entries: JournalEntry[]; stocks: Record<string, StockInfo> }>('/api/journal'),
+  saveNote: (orderId: string, note: JournalNote) => send<{ note: JournalNote }>('PUT', `/api/journal/${orderId}`, note),
   exchange: (from: Currency, amount: number) => send<{ trade: FxTrade }>('POST', '/api/fx', { from, amount }),
   fxTrades: () => get<{ trades: FxTrade[] }>('/api/fx/trades'),
   rankings: (type: RankingType, market?: Market) =>

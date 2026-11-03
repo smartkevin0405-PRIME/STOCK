@@ -82,6 +82,17 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (account_id, day)
   );
   `,
+  // v3: 매매일지 (주문마다 이유 메모 + 태그)
+  `
+  CREATE TABLE journal_notes (
+    order_id TEXT PRIMARY KEY,
+    account_id INTEGER NOT NULL,
+    text TEXT NOT NULL DEFAULT '',
+    tags TEXT NOT NULL DEFAULT '[]',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  `,
 ];
 
 /** DB 열기 + 스키마 맞추기. ':memory:'는 테스트용 */

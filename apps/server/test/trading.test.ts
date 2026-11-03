@@ -273,3 +273,35 @@ describe('하루 자산 기록 (오늘 수익)', () => {
     expect(svc.view().dayBase?.totalKrw).toBe(10_000_000);
   });
 });
+
+describe('매매일지', () => {
+  it('주문할 때 메모 → 체결되면 일지에 표시', async () => {
+    const { svc } = setup();
+    const { order } = await svc.placeOrder({
+      code: '005930', side: 'buy', type: 'market', qty: 2,
+      note: { text: '  실적 발표 기대  ', tags: ['실적', '실적', ' 분할매수 '] },
+    });
+    const [entry] = svc.journal();
+    expect(entry?.order.id).toBe(order.id);
+    expect(entry?.fills).toHaveLength(1);
+    expect(entry?.note).toMatchObject({ text: '실적 발표 기대', tags: ['실적', '분할매수'] });
+  });
+
+  it('미체결 주문은 일지에 안 나옴, 메모 없이도 체결은 나옴', async () => {
+    const { svc } = setup();
+    await svc.placeOrder({ code: '005930', side: 'buy', type: 'limit', qty: 1, limitPrice: 60_000, note: { text: '대기', tags: [] } });
+    await svc.placeOrder({ code: '005930', side: 'buy', type: 'market', qty: 1 });
+    const entries = svc.journal();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.note).toBeUndefined();
+  });
+
+  it('나중에 메모 쓰기·고치기', async () => {
+    const { svc } = setup();
+    const { order } = await svc.placeOrder({ code: '005930', side: 'buy', type: 'market', qty: 1 });
+    svc.saveNote(order.id, { text: '충동구매였다', tags: ['충동'] });
+    svc.saveNote(order.id, { text: '충동구매였다. 다음엔 분할로', tags: ['충동', '분할매수'] });
+    expect(svc.journal()[0]?.note).toMatchObject({ text: '충동구매였다. 다음엔 분할로', tags: ['충동', '분할매수'] });
+    expect(() => svc.saveNote('nope', { text: 'x', tags: [] })).toThrow('주문을 찾을 수 없어요');
+  });
+});

@@ -1,5 +1,5 @@
 import { DEFAULT_CONFIG, getMarketStatus, priceLimits, roundToTick, tickSize, validateOrder } from '@stock/core';
-import type { OrderSide, OrderType, Quote, StockInfo } from '@stock/shared';
+import type { JournalNote, OrderSide, OrderType, Quote, StockInfo } from '@stock/shared';
 import { useState, type ReactNode } from 'react';
 import { account, useAccount } from '../lib/account';
 import { api } from '../lib/api';
@@ -8,6 +8,7 @@ import { describeFill } from '../lib/notify';
 import { toast } from '../lib/toast';
 import { CloseIcon } from './Icons';
 import { Segmented } from './Layout';
+import { NoteEditor } from './NoteEditor';
 
 interface Props {
   stock: StockInfo;
@@ -25,6 +26,8 @@ export function OrderSheet({ stock, quote, initialSide, onClose }: Props) {
   const [qtyText, setQtyText] = useState('1');
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState<string>();
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [note, setNote] = useState<JournalNote>({ text: '', tags: [] });
   const price = parseNumberInput(priceText);
   const qty = parseNumberInput(qtyText);
   const setPrice = (p: number) => setPriceText(formatNumberInput(String(p)));
@@ -57,7 +60,15 @@ export function OrderSheet({ stock, quote, initialSide, onClose }: Props) {
     setBusy(true);
     setServerError(undefined);
     try {
-      const res = await api.placeOrder({ code: stock.code, side, type, qty, ...(type === 'limit' ? { limitPrice: price } : {}) });
+      const hasNote = note.text.trim() !== '' || note.tags.length > 0;
+      const res = await api.placeOrder({
+        code: stock.code,
+        side,
+        type,
+        qty,
+        ...(type === 'limit' ? { limitPrice: price } : {}),
+        ...(hasNote ? { note } : {}),
+      });
       if (res.fill) toast(describeFill(res.fill, stock), 'info', `fill:${res.order.id}`);
       else if (res.order.status === 'reserved') toast(`예약주문 접수 · 다음 장 시작(${formatDateTime(status.nextOpen)})에 처리돼요`);
       else toast('주문 접수 · 가격이 닿으면 체결돼요');
@@ -137,6 +148,14 @@ export function OrderSheet({ stock, quote, initialSide, onClose }: Props) {
                 v={side === 'buy' ? formatMoney(cash[stock.currency], stock.currency) : `${sellable.toLocaleString()}주`}
               />
             </dl>
+          )}
+
+          {noteOpen ? (
+            <NoteEditor value={note} onChange={setNote} />
+          ) : (
+            <button onClick={() => setNoteOpen(true)} className="text-sm font-medium text-brand">
+              + 매매 이유 메모 남기기
+            </button>
           )}
 
           {error && <p className="text-sm font-medium text-up">{error}</p>}

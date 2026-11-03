@@ -1,4 +1,4 @@
-import type { Cash, Currency, Fill, FxTrade, Order, OrderStatus, Position } from '@stock/shared';
+import type { Cash, Currency, Fill, FxTrade, JournalNote, Order, OrderStatus, Position } from '@stock/shared';
 import type { DatabaseSync } from 'node:sqlite';
 
 export interface SnapshotRow {
@@ -223,6 +223,39 @@ export class TradingRepo {
       receive: r.receive as number,
       executedAt: r.executed_at as number,
     }));
+  }
+
+  upsertNote(accountId: number, orderId: string, note: JournalNote, now: number): void {
+    this.db
+      .prepare(
+        `INSERT INTO journal_notes (order_id, account_id, text, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(order_id) DO UPDATE SET text = excluded.text, tags = excluded.tags, updated_at = excluded.updated_at`,
+      )
+      .run(orderId, accountId, note.text, JSON.stringify(note.tags), now, now);
+  }
+
+  notes(orderIds: string[]): Map<string, JournalNote> {
+    if (orderIds.length === 0) return new Map();
+    const rows = this.db
+      .prepare(`SELECT * FROM journal_notes WHERE order_id IN (${orderIds.map(() => '?').join(',')})`)
+      .all(...orderIds) as Row[];
+    return new Map(
+      rows.map((r) => [r.order_id as string, { text: r.text as string, tags: JSON.parse(r.tags as string) as string[], updatedAt: r.updated_at as number }]),
+    );
+  }
+
+  /** 체결된 주문 (최근 것부터) */
+  filledOrders(accountId: number, limit = 100): Order[] {
+    return (
+      this.db.prepare("SELECT * FROM orders WHERE account_id = ? AND status = 'filled' ORDER BY updated_at DESC LIMIT ?").all(accountId, limit) as Row[]
+    ).map(toOrder);
+  }
+
+  fillsOfOrders(orderIds: string[]): Fill[] {
+    if (orderIds.length === 0) return [];
+    return (
+      this.db.prepare(`SELECT * FROM fills WHERE order_id IN (${orderIds.map(() => '?').join(',')}) ORDER BY executed_at`).all(...orderIds) as Row[]
+    ).map(toFill);
   }
 
   /** 하루 기록은 하루 한 번만 (이미 있으면 무시) */

@@ -154,6 +154,20 @@ export interface AccountView {
   dayBase?: { day: string; totalKrw: number };
 }
 
+/** 매매일지 메모 (주문 하나에 하나) */
+export interface JournalNote {
+  text: string;
+  tags: string[];
+  updatedAt?: number;
+}
+
+/** 일지 한 줄 = 체결된 주문 + 체결 내역 + 메모 */
+export interface JournalEntry {
+  order: Order;
+  fills: Fill[];
+  note?: JournalNote;
+}
+
 export interface SeasonSummary {
   season: number;
   seedKrw: number;

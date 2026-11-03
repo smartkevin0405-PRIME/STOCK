@@ -1,4 +1,4 @@
-import type { Currency, OrderSide, OrderType, StockInfo } from '@stock/shared';
+import type { Currency, JournalNote, OrderSide, OrderType, StockInfo } from '@stock/shared';
 import type { MarketDataProvider } from '../market/provider';
 import type { FastifyInstance } from 'fastify';
 import { TradingError, type TradingService } from './service';
@@ -6,6 +6,16 @@ import { TradingError, type TradingService } from './service';
 const isSide = (v: unknown): v is OrderSide => v === 'buy' || v === 'sell';
 const isType = (v: unknown): v is OrderType => v === 'market' || v === 'limit';
 const isCcy = (v: unknown): v is Currency => v === 'KRW' || v === 'USD';
+
+/** 요청 본문의 메모 → JournalNote (형식이 이상하면 undefined) */
+function parseNote(v: unknown): JournalNote | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const { text, tags } = v as { text?: unknown; tags?: unknown };
+  return {
+    text: typeof text === 'string' ? text : '',
+    tags: Array.isArray(tags) ? tags.filter((t): t is string => typeof t === 'string') : [],
+  };
+}
 
 /** 계좌·주문·환전 API */
 export function registerTradingRoutes(app: FastifyInstance, trading: TradingService, provider: MarketDataProvider): void {
@@ -39,7 +49,7 @@ export function registerTradingRoutes(app: FastifyInstance, trading: TradingServ
     return { orders, stocks: await stocksOf(orders.map((o) => o.code)) };
   });
 
-  app.post<{ Body: { code?: unknown; side?: unknown; type?: unknown; qty?: unknown; limitPrice?: unknown } }>('/api/orders', async (req, reply) => {
+  app.post<{ Body: { code?: unknown; side?: unknown; type?: unknown; qty?: unknown; limitPrice?: unknown; note?: unknown } }>('/api/orders', async (req, reply) => {
     const b = req.body ?? {};
     if (typeof b.code !== 'string' || !isSide(b.side) || !isType(b.type) || typeof b.qty !== 'number') {
       throw new TradingError('BAD_REQUEST', '주문 내용이 올바르지 않아요');
@@ -51,6 +61,7 @@ export function registerTradingRoutes(app: FastifyInstance, trading: TradingServ
       type: b.type,
       qty: b.qty,
       ...(typeof b.limitPrice === 'number' ? { limitPrice: b.limitPrice } : {}),
+      ...(parseNote(b.note) ? { note: parseNote(b.note)! } : {}),
     });
     return reply.code(201).send(result);
   });
@@ -70,6 +81,17 @@ export function registerTradingRoutes(app: FastifyInstance, trading: TradingServ
   app.get<{ Querystring: { code?: string; limit?: string } }>('/api/fills', async (req) => {
     const fills = trading.fills(Math.min(Number(req.query.limit) || 100, 500), req.query.code);
     return { fills, stocks: await stocksOf(fills.map((f) => f.code)) };
+  });
+
+  app.get<{ Querystring: { limit?: string } }>('/api/journal', async (req) => {
+    const entries = trading.journal(Math.min(Number(req.query.limit) || 100, 500));
+    return { entries, stocks: await stocksOf(entries.map((e) => e.order.code)) };
+  });
+
+  app.put<{ Params: { orderId: string }; Body: unknown }>('/api/journal/:orderId', async (req) => {
+    const note = parseNote(req.body);
+    if (!note) throw new TradingError('BAD_REQUEST', '메모 내용이 올바르지 않아요');
+    return { note: trading.saveNote(req.params.orderId, note) };
   });
 
   app.get('/api/fx/trades', async () => ({ trades: trading.fxTrades() }));

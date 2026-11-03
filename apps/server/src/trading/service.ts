@@ -18,6 +18,8 @@ import type {
   Currency,
   Fill,
   FxTrade,
+  JournalEntry,
+  JournalNote,
   Market,
   Order,
   OrderSide,
@@ -55,6 +57,16 @@ export interface PlaceOrderInput {
   type: OrderType;
   qty: number;
   limitPrice?: number;
+  /** 매매일지 메모 (선택) */
+  note?: JournalNote;
+}
+
+/** 메모 정리: 앞뒤 공백 제거, 길이 제한, 태그 중복 제거 */
+export function cleanNote(note: JournalNote): JournalNote {
+  return {
+    text: note.text.trim().slice(0, 2_000),
+    tags: [...new Set(note.tags.map((t) => t.trim()).filter(Boolean))].slice(0, 10).map((t) => t.slice(0, 20)),
+  };
 }
 
 export interface TradingServiceOptions {
@@ -183,6 +195,27 @@ export class TradingService {
     return this.repo.fxTrades(this.account().id, limit);
   }
 
+  /** 매매일지: 체결된 주문 + 체결 내역 + 메모 */
+  journal(limit = 100): JournalEntry[] {
+    const acc = this.account();
+    const orders = this.repo.filledOrders(acc.id, limit);
+    const ids = orders.map((o) => o.id);
+    const notes = this.repo.notes(ids);
+    const fills = this.repo.fillsOfOrders(ids);
+    return orders.map((order) => {
+      const note = notes.get(order.id);
+      return { order, fills: fills.filter((f) => f.orderId === order.id), ...(note ? { note } : {}) };
+    });
+  }
+
+  /** 메모 쓰기·고치기 (내 주문만) */
+  saveNote(orderId: string, note: JournalNote): JournalNote {
+    const o = this.repo.order(orderId);
+    if (!o || o.accountId !== this.account().id) throw new TradingError('NOT_FOUND', '주문을 찾을 수 없어요', 404);
+    this.repo.upsertNote(o.accountId, orderId, cleanNote(note), this.now());
+    return this.repo.notes([orderId]).get(orderId)!;
+  }
+
   seasons(): SeasonSummary[] {
     return this.repo.accounts().map((a) => ({
       season: a.season,
@@ -233,6 +266,10 @@ export class TradingService {
       expiresAt: sessionCloseAt(stock.market, now),
     };
     this.repo.insertOrder(acc.id, order);
+    if (input.note) {
+      const note = cleanNote(input.note);
+      if (note.text || note.tags.length) this.repo.upsertNote(acc.id, order.id, note, now);
+    }
 
     const fill = open ? this.execute(order.id, quote, 'taker', stock) : null;
     const saved = this.repo.order(order.id)!;
