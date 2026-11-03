@@ -2,6 +2,7 @@ import type { Currency, JournalNote, OrderSide, OrderType, StockInfo } from '@st
 import type { MarketDataProvider } from '../market/provider';
 import type { FastifyInstance } from 'fastify';
 import { TradingError, type TradingService } from './service';
+import type { WatchlistService } from './watchlist';
 
 const isSide = (v: unknown): v is OrderSide => v === 'buy' || v === 'sell';
 const isType = (v: unknown): v is OrderType => v === 'market' || v === 'limit';
@@ -18,7 +19,12 @@ function parseNote(v: unknown): JournalNote | undefined {
 }
 
 /** 계좌·주문·환전 API */
-export function registerTradingRoutes(app: FastifyInstance, trading: TradingService, provider: MarketDataProvider): void {
+export function registerTradingRoutes(
+  app: FastifyInstance,
+  trading: TradingService,
+  provider: MarketDataProvider,
+  watchlists?: WatchlistService,
+): void {
   /** 화면에 종목명을 보여주기 위해 코드 → 종목 정보 */
   const stocksOf = async (codes: string[]): Promise<Record<string, StockInfo>> => {
     const list = await Promise.all([...new Set(codes)].map((c) => provider.getStock(c)));
@@ -100,5 +106,51 @@ export function registerTradingRoutes(app: FastifyInstance, trading: TradingServ
     const { from, amount } = req.body ?? {};
     if (!isCcy(from) || typeof amount !== 'number') throw new TradingError('BAD_REQUEST', '환전 내용이 올바르지 않아요');
     return reply.code(201).send({ trade: await trading.exchange(from, amount) });
+  });
+
+  if (!watchlists) return;
+
+  // ── 관심종목 그룹 ──
+  const groupsWithStocks = async () => {
+    const groups = watchlists.list();
+    return { groups, stocks: await stocksOf(groups.flatMap((g) => g.codes)) };
+  };
+  const idOf = (v: string) => {
+    const id = Number(v);
+    if (!Number.isInteger(id)) throw new TradingError('NOT_FOUND', '그룹을 찾을 수 없어요', 404);
+    return id;
+  };
+
+  app.get('/api/watchlists', groupsWithStocks);
+
+  app.post<{ Body: { name?: unknown } }>('/api/watchlists', async (req, reply) => {
+    if (typeof req.body?.name !== 'string') throw new TradingError('BAD_NAME', '그룹 이름을 입력해주세요');
+    watchlists.create(req.body.name);
+    return reply.code(201).send(await groupsWithStocks());
+  });
+
+  app.patch<{ Params: { id: string }; Body: { name?: unknown; codes?: unknown } }>('/api/watchlists/:id', async (req) => {
+    const id = idOf(req.params.id);
+    const { name, codes } = req.body ?? {};
+    if (typeof name === 'string') watchlists.rename(id, name);
+    if (Array.isArray(codes)) watchlists.setCodes(id, codes.filter((c): c is string => typeof c === 'string'));
+    return groupsWithStocks();
+  });
+
+  app.delete<{ Params: { id: string } }>('/api/watchlists/:id', async (req) => {
+    watchlists.remove(idOf(req.params.id));
+    return groupsWithStocks();
+  });
+
+  app.post<{ Params: { id: string }; Body: { code?: unknown } }>('/api/watchlists/:id/items', async (req) => {
+    const code = req.body?.code;
+    if (typeof code !== 'string' || !(await provider.getStock(code))) throw new TradingError('NOT_FOUND', '종목을 찾을 수 없어요', 404);
+    watchlists.add(idOf(req.params.id), code);
+    return groupsWithStocks();
+  });
+
+  app.delete<{ Params: { id: string; code: string } }>('/api/watchlists/:id/items/:code', async (req) => {
+    watchlists.removeCode(idOf(req.params.id), req.params.code);
+    return groupsWithStocks();
   });
 }

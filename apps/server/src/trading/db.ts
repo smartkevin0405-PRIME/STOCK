@@ -93,6 +93,22 @@ const MIGRATIONS: string[] = [
     updated_at INTEGER NOT NULL
   );
   `,
+  // v4: 관심종목 그룹 (시즌과 상관없이 유지)
+  `
+  CREATE TABLE watch_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL DEFAULT 1,
+    name TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE watch_items (
+    group_id INTEGER NOT NULL REFERENCES watch_groups(id) ON DELETE CASCADE,
+    code TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    PRIMARY KEY (group_id, code)
+  );
+  `,
 ];
 
 /** DB 열기 + 스키마 맞추기. ':memory:'는 테스트용 */

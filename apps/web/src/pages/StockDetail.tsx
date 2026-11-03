@@ -32,6 +32,7 @@ export function StockDetail() {
   const watch = useWatchlist();
   const [interval, setInterval] = useState<CandleInterval>('1d');
   const [orderSide, setOrderSide] = useState<OrderSide | null>(null);
+  const [pickGroup, setPickGroup] = useState(false);
 
   const { data, error } = useAsync(() => api.stock(code), [code]);
   const quote = useLiveQuote(data?.stock.code, data?.quote);
@@ -65,7 +66,12 @@ export function StockDetail() {
           <BackIcon />
         </button>
         <button
-          onClick={() => watch.toggle(stock.code)}
+          onClick={() => {
+            // 그룹이 여러 개면 그룹별로 담기/빼기, 하나면 바로 토글
+            if (watch.groups.length > 1) setPickGroup(true);
+            else if (watch.has(stock.code)) void watch.removeAll(stock.code);
+            else if (watch.groups[0]) void watch.add(watch.groups[0].id, stock.code);
+          }}
           className={`p-2 ${watch.has(stock.code) ? 'text-[#ffb800]' : 'text-sub'}`}
           aria-label="관심 종목"
         >
@@ -131,6 +137,32 @@ export function StockDetail() {
       </div>
 
       {orderSide && <OrderSheet stock={stock} quote={quote} initialSide={orderSide} onClose={() => setOrderSide(null)} />}
+
+      {pickGroup && (
+        <div className="fixed inset-0 z-30 flex items-end bg-black/40" onClick={() => setPickGroup(false)}>
+          <div className="mx-auto w-full max-w-[480px] rounded-t-3xl bg-card px-5 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-5" onClick={(e) => e.stopPropagation()}>
+            <h2 className="mb-3 text-lg font-bold">관심 그룹</h2>
+            {watch.groups.map((g) => {
+              const inGroup = g.codes.includes(stock.code);
+              return (
+                <button
+                  key={g.id}
+                  onClick={() => void (inGroup ? watch.remove(g.id, stock.code) : watch.add(g.id, stock.code))}
+                  className="flex w-full items-center justify-between border-b border-line py-3.5 text-left last:border-0"
+                >
+                  <span className="font-semibold">
+                    {g.name} <span className="text-sm font-normal text-sub">{g.codes.length}종목</span>
+                  </span>
+                  <span className={`flex h-6 w-6 items-center justify-center rounded-full text-sm ${inGroup ? 'bg-brand text-white' : 'bg-soft text-transparent'}`}>✓</span>
+                </button>
+              );
+            })}
+            <button onClick={() => setPickGroup(false)} className="mt-3 w-full rounded-xl bg-soft py-3 font-semibold">
+              완료
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

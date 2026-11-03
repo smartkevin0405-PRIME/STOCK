@@ -154,6 +154,13 @@ export interface AccountView {
   dayBase?: { day: string; totalKrw: number };
 }
 
+/** 관심종목 그룹 (codes 순서 = 화면 순서) */
+export interface WatchGroup {
+  id: number;
+  name: string;
+  codes: string[];
+}
+
 /** 매매일지 메모 (주문 하나에 하나) */
 export interface JournalNote {
   text: string;

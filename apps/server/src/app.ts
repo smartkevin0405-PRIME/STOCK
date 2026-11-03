@@ -5,6 +5,7 @@ import Fastify from 'fastify';
 import type { MarketDataProvider } from './market/provider';
 import { registerTradingRoutes } from './trading/routes';
 import type { TradingService } from './trading/service';
+import type { WatchlistService } from './trading/watchlist';
 
 const INTERVALS: readonly CandleInterval[] = ['1m', '5m', '15m', '60m', '1d', '1w', '1M'];
 
@@ -12,15 +13,17 @@ export interface AppOptions {
   provider: MarketDataProvider;
   /** 모의투자 계좌 (없으면 시세 API만) */
   trading?: TradingService;
+  /** 관심종목 그룹 */
+  watchlists?: WatchlistService;
   logger?: boolean;
   /** 지수 브로드캐스트 간격 (ms) */
   indicesIntervalMs?: number;
 }
 
-export async function buildApp({ provider, trading, logger = false, indicesIntervalMs = 3_000 }: AppOptions) {
+export async function buildApp({ provider, trading, watchlists, logger = false, indicesIntervalMs = 3_000 }: AppOptions) {
   const app = Fastify({ logger });
   await app.register(websocket);
-  if (trading) registerTradingRoutes(app, trading, provider);
+  if (trading) registerTradingRoutes(app, trading, provider, watchlists);
 
   const withQuotes = async (codes: string[]) => {
     const quotes = await provider.getQuotes(codes);

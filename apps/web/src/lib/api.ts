@@ -19,6 +19,7 @@ import type {
   RankingType,
   SeasonSummary,
   StockInfo,
+  WatchGroup,
 } from '@stock/shared';
 
 export type { RankingType };
@@ -56,6 +57,11 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export interface WatchlistData {
+  groups: WatchGroup[];
+  stocks: Record<string, StockInfo>;
+}
+
 export interface StockWithQuote {
   stock: StockInfo;
   quote: Quote | null;
@@ -80,6 +86,12 @@ export const api = {
   cancelOrder: (id: string) => send<{ order: Order }>('POST', `/api/orders/${id}/cancel`),
   amendOrder: (id: string, patch: { qty?: number; limitPrice?: number }) => send<{ order: Order }>('PATCH', `/api/orders/${id}`, patch),
   fills: (code?: string) => get<{ fills: Fill[]; stocks: Record<string, StockInfo> }>(`/api/fills${code ? `?code=${encodeURIComponent(code)}` : ''}`),
+  watchlists: () => get<WatchlistData>('/api/watchlists'),
+  createWatchGroup: (name: string) => send<WatchlistData>('POST', '/api/watchlists', { name }),
+  updateWatchGroup: (id: number, patch: { name?: string; codes?: string[] }) => send<WatchlistData>('PATCH', `/api/watchlists/${id}`, patch),
+  deleteWatchGroup: (id: number) => send<WatchlistData>('DELETE', `/api/watchlists/${id}`),
+  addWatch: (id: number, code: string) => send<WatchlistData>('POST', `/api/watchlists/${id}/items`, { code }),
+  removeWatch: (id: number, code: string) => send<WatchlistData>('DELETE', `/api/watchlists/${id}/items/${encodeURIComponent(code)}`),
   journal: () => get<{ entries: JournalEntry[]; stocks: Record<string, StockInfo> }>('/api/journal'),
   saveNote: (orderId: string, note: JournalNote) => send<{ note: JournalNote }>('PUT', `/api/journal/${orderId}`, note),
   exchange: (from: Currency, amount: number) => send<{ trade: FxTrade }>('POST', '/api/fx', { from, amount }),
