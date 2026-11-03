@@ -1,6 +1,7 @@
 import type { AccountEvent, IndexQuote, Quote, ServerMessage } from '@stock/shared';
 import { useEffect, useSyncExternalStore } from 'react';
 import { API_BASE } from './api';
+import { getAuthState, getToken } from './auth';
 
 export type AlertMessage = Extract<ServerMessage, { type: 'alert' }>;
 export type AchievementMessage = Extract<ServerMessage, { type: 'achievement' }>;
@@ -70,9 +71,12 @@ class LiveStore {
   }
 
   connect() {
-    if (this.ws) return;
+    // 로그아웃 상태면 연결 안 함 (로그인하면 다시 연결)
+    if (this.ws || getAuthState() === 'out') return;
     const base = API_BASE || window.location.origin;
-    const url = base.replace(/^http/, 'ws') + '/ws';
+    const token = getToken();
+    // 브라우저 WebSocket은 헤더를 못 붙여서 주소에 토큰
+    const url = base.replace(/^http/, 'ws') + '/ws' + (token ? `?token=${encodeURIComponent(token)}` : '');
     const ws = new WebSocket(url);
     this.ws = ws;
     ws.onopen = () => {
@@ -103,6 +107,11 @@ class LiveStore {
       this.emit();
       setTimeout(() => this.connect(), 2_000);
     };
+  }
+
+  /** 로그인·로그아웃 뒤 새 토큰으로 다시 연결 */
+  reconnect() {
+    this.ws?.close();
   }
 
   private syncSubscriptions() {

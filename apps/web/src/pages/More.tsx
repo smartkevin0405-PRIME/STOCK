@@ -2,6 +2,8 @@ import { Link } from 'react-router';
 import { Card, Page, Segmented, Soon } from '../components/Layout';
 import { ChevronIcon } from '../components/Icons';
 import { isNative } from '../lib/server';
+import { authRequired, logout } from '../lib/auth';
+import { live } from '../lib/live';
 import { useTheme, type ThemeSetting } from '../lib/theme';
 import { sourceName, useDataStatus } from '../lib/status';
 
@@ -64,6 +66,20 @@ export function More() {
         </div>
         <p className="text-xs text-sub">국내는 네이버 실시간 시세를 쓰고, 막히면 야후(20분 지연)로 자동 전환돼요.</p>
       </Card>
+
+      {authRequired() && (
+        <Card className="py-2">
+          <button
+            className="w-full py-3 text-left font-medium text-sub"
+            onClick={() => {
+              logout();
+              live.reconnect();
+            }}
+          >
+            로그아웃
+          </button>
+        </Card>
+      )}
 
       <p className="px-2 text-center text-xs text-sub">모의투자 앱이에요. 실제 돈이 오가지 않고, 투자 조언이 아니에요.</p>
     </Page>

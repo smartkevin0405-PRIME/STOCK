@@ -1,11 +1,11 @@
 import { replayDayTime } from '@stock/core';
 import type { Candle, ReplayResult, ReplayScenario, ReplayScenariosResponse, StockInfo } from '@stock/shared';
-import { API_BASE, ApiError } from './api';
+import { ApiError, apiFetch } from './api';
 
 // 타임머신 리플레이 API (본 계좌와 분리)
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(API_BASE + path, init);
+  const res = await apiFetch(path, init);
   const data = (await res.json().catch(() => ({}))) as T & { error?: string; code?: string };
   if (!res.ok) throw new ApiError(data.error ?? `요청 실패 (${res.status})`, res.status, data.code);
   return data;

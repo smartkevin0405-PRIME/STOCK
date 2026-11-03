@@ -1,3 +1,4 @@
+import fastifyStatic from '@fastify/static';
 import websocket from '@fastify/websocket';
 import { getMarketStatus, searchStocks } from '@stock/core';
 import type { CandleInterval, ClientMessage, Quote, ServerMessage } from '@stock/shared';
@@ -6,6 +7,7 @@ import type { AiProvider } from './ai/provider';
 import { registerAiRoutes } from './ai/routes';
 import { registerOrderBookRoute, type OrderBookFetcher } from './market/orderbookRoutes';
 import { registerCors } from './cors';
+import { registerAuth, type AuthService } from './auth';
 import type { MarketDataProvider } from './market/provider';
 import { registerAchievementRoutes } from './trading/achievementRoutes';
 import type { AchievementService } from './trading/achievements';
@@ -35,6 +37,12 @@ export interface AppOptions {
   /** 타임머신 리플레이 결과 저장소 */
   replay?: ReplayStore;
   logger?: boolean;
+  /** 비밀번호 로그인 (없으면 로그인 없이) */
+  auth?: AuthService;
+  /** 빌드된 웹앱 폴더 (있으면 같은 포트에서 같이 서비스) */
+  webDir?: string;
+  /** 앞에 Caddy 같은 프록시가 있을 때 X-Forwarded-For로 IP 확인 */
+  trustProxy?: boolean;
   /** 지수 브로드캐스트 간격 (ms) */
   indicesIntervalMs?: number;
   /** 10단계 호가 (한투 키 있을 때만) */
@@ -53,12 +61,17 @@ export async function buildApp({
   replay,
   orderBook,
   ai,
+  auth,
+  webDir,
+  trustProxy = false,
   logger = false,
   indicesIntervalMs = 3_000,
 }: AppOptions) {
-  const app = Fastify({ logger });
+  const app = Fastify({ logger, trustProxy });
+  // CORS 먼저 (앱의 사전 요청 OPTIONS가 로그인 검사에 막히지 않게)
   registerCors(app);
   await app.register(websocket);
+  registerAuth(app, auth);
   if (trading) registerTradingRoutes(app, trading, provider, watchlists);
   if (trading) registerAiRoutes(app, { trading, provider, ai: ai ?? null });
   if (alerts) registerAlertRoutes(app, { provider, alerts, push });
@@ -72,7 +85,7 @@ export async function buildApp({
     return new Map(quotes.map((q) => [q.code, q]));
   };
 
-  app.get('/api/health', async () => ({ ok: true, ...provider.status() }));
+  app.get('/api/health', async () => ({ ok: true, auth: !!auth, ...provider.status() }));
 
   // 검색 (q 없으면 전체)
   app.get<{ Querystring: { q?: string; limit?: string } }>('/api/stocks', async (req) => {
@@ -199,6 +212,16 @@ export async function buildApp({
       syncWatch();
     });
   });
+
+  if (webDir) {
+    await app.register(fastifyStatic, {
+      root: webDir,
+      // 파일명에 해시가 붙은 빌드 결과는 오래 캐시
+      setHeaders: (reply, path) => {
+        if (/[\\/]assets[\\/]/.test(path)) reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+      },
+    });
+  }
 
   return app;
 }

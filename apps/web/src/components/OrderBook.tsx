@@ -1,6 +1,6 @@
 import type { Currency, OrderBook as Book, OrderBookLevel } from '@stock/shared';
 import { useEffect, useState } from 'react';
-import { API_BASE } from '../lib/api';
+import { apiFetch } from '../lib/api';
 import { changeColor, formatPrice, formatRate } from '../lib/format';
 
 const POLL_MS = 3_000;
@@ -15,7 +15,7 @@ export function OrderBook({ code, currency, prevClose, price }: { code: string; 
     setBook(null);
     const load = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/orderbook/${encodeURIComponent(code)}`);
+        const res = await apiFetch(`/api/orderbook/${encodeURIComponent(code)}`);
         if (!alive) return;
         // 404: 호가 소스 없음 → 더 안 부름
         if (res.status === 404) return setBook(null);

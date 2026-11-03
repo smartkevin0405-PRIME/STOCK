@@ -26,6 +26,7 @@ import type {
 } from '@stock/shared';
 import type { CoachReport, DrawdownResult, TradeStats } from '@stock/core';
 import { serverBase } from './server';
+import { getToken, unauthorized } from './auth';
 
 export type { RankingType };
 
@@ -43,8 +44,21 @@ export class ApiError extends Error {
   }
 }
 
+/** 로그인 토큰을 붙여서 요청. 401이면 로그인 화면으로 */
+async function request(path: string, init: RequestInit = {}): Promise<Response> {
+  const token = getToken();
+  const headers = new Headers(init.headers);
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const res = await fetch(API_BASE + path, { ...init, headers });
+  if (res.status === 401 && path !== '/api/login') unauthorized();
+  return res;
+}
+
+/** 다른 모듈에서 서버를 직접 부를 때도 이걸로 (로그인 토큰이 붙음) */
+export const apiFetch = request;
+
 async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(API_BASE + path, {
+  const res = await request(path, {
     method,
     ...(body !== undefined ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
   });
@@ -54,7 +68,7 @@ async function send<T>(method: string, path: string, body?: unknown): Promise<T>
 }
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(API_BASE + path);
+  const res = await request(path);
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? `요청 실패 (${res.status})`);
@@ -99,7 +113,8 @@ export interface StockWithQuote {
 }
 
 export const api = {
-  health: () => get<{ ok: boolean } & DataStatus>('/api/health'),
+  health: () => get<{ ok: boolean; auth?: boolean } & DataStatus>('/api/health'),
+  login: (password: string) => send<{ token: string }>('POST', '/api/login', { password }),
   search: (q: string, limit = 30) =>
     get<{ items: StockWithQuote[] }>(`/api/stocks?q=${encodeURIComponent(q)}&limit=${limit}`),
   stock: (code: string) => get<StockWithQuote>(`/api/stocks/${encodeURIComponent(code)}`),

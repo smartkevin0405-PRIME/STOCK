@@ -1,6 +1,6 @@
 import type { StockInfo } from '@stock/shared';
 import { useEffect, useRef, useState } from 'react';
-import { API_BASE } from '../lib/api';
+import { apiFetch } from '../lib/api';
 import { toast } from '../lib/toast';
 
 type Template = 'weekly' | 'stock' | 'habits';
@@ -17,7 +17,7 @@ const APPS = [
 ];
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(API_BASE + path, init);
+  const res = await apiFetch(path, init);
   const data = (await res.json().catch(() => ({}))) as T & { error?: string };
   if (!res.ok) throw new Error(data.error ?? `요청 실패 (${res.status})`);
   return data;

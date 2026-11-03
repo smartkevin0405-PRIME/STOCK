@@ -1,0 +1,36 @@
+# 앱 + Caddy(자동 https). 설정은 .env 파일에 (.env.example 참고)
+# 실행: docker compose up -d --build
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # 비밀번호 없이 인터넷에 열리지 않게 (없으면 실행 안 됨)
+      APP_PASSWORD: ${APP_PASSWORD:?.env에 APP_PASSWORD를 넣어주세요}
+      # 앞에 Caddy가 있어서 실제 접속 IP는 X-Forwarded-For로 확인
+      TRUST_PROXY: "1"
+    volumes:
+      - app-data:/data
+    # 포트는 밖에 안 열고 Caddy만 접근
+
+  caddy:
+    image: caddy:2.11
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?.env에 DOMAIN을 넣어주세요}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  app-data:
+  caddy-data:
+  caddy-config:

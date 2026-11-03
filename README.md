@@ -15,7 +15,10 @@ npm install
 npm run dev      # 서버(8787) + 웹(5173) 같이 실행 → http://localhost:5173
 npm test         # 매매 규칙 엔진 + 서버 테스트
 npm run typecheck
+npm run build && npm start   # 배포용: 서버가 빌드된 웹앱까지 같이 서비스 (8787 하나로)
 ```
+
+서버에 올리는 방법(Oracle Cloud 무료 VM + Docker + 자동 https): [docs/DEPLOY.md](docs/DEPLOY.md)
 
 시세 소스는 환경변수로 바꿀 수 있어요.
 
@@ -28,6 +31,8 @@ npm run typecheck
 | `VAPID_SUBJECT` | `mailto:admin@example.com` | 푸시 서비스에 알리는 연락처. 배포할 때 본인 주소로 |
 | `FIREBASE_SERVICE_ACCOUNT` | 없음 | 안드로이드 앱 푸시(FCM)용 서비스 계정 JSON 파일 경로. 없으면 앱 푸시만 꺼짐 |
 | `CORS_ORIGINS` | 없음 | 앱(`https://localhost`) 말고 API를 더 허용할 주소 (쉼표로 구분) |
+| `APP_PASSWORD` | 없음 (로그인 끔) | 로그인 비밀번호. 배포할 땐 꼭 설정 |
+| `AUTH_SECRET` | 자동 생성 | 로그인 토큰 서명 키. 없으면 `DATA_DIR/auth-secret`에 만들어 저장 |
 
 폰 푸시는 https 주소에서만 동작해요 (배포 후). 아이폰은 Safari에서 "홈 화면에 추가"한 앱에서만 켤 수 있어요.
 
