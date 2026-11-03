@@ -3,6 +3,8 @@ import { getMarketStatus, searchStocks } from '@stock/core';
 import type { CandleInterval, ClientMessage, Quote, ServerMessage } from '@stock/shared';
 import Fastify from 'fastify';
 import type { MarketDataProvider } from './market/provider';
+import { registerReplayRoutes } from './replay/routes';
+import type { ReplayStore } from './replay/store';
 import { registerAlertRoutes, startNotifier } from './trading/alertRoutes';
 import type { AlertService } from './trading/alerts';
 import type { PushService } from './trading/push';
@@ -21,16 +23,19 @@ export interface AppOptions {
   /** 가격 알림 (+ 폰 푸시) */
   alerts?: AlertService;
   push?: PushService;
+  /** 타임머신 리플레이 결과 저장소 */
+  replay?: ReplayStore;
   logger?: boolean;
   /** 지수 브로드캐스트 간격 (ms) */
   indicesIntervalMs?: number;
 }
 
-export async function buildApp({ provider, trading, watchlists, alerts, push, logger = false, indicesIntervalMs = 3_000 }: AppOptions) {
+export async function buildApp({ provider, trading, watchlists, alerts, push, replay, logger = false, indicesIntervalMs = 3_000 }: AppOptions) {
   const app = Fastify({ logger });
   await app.register(websocket);
   if (trading) registerTradingRoutes(app, trading, provider, watchlists);
   if (alerts) registerAlertRoutes(app, { provider, alerts, push });
+  if (replay) registerReplayRoutes(app, { provider, store: replay });
 
   const withQuotes = async (codes: string[]) => {
     const quotes = await provider.getQuotes(codes);

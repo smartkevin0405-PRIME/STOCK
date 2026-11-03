@@ -8,6 +8,7 @@ import { MockProvider } from './market/mock';
 import { SEED_STOCKS } from './market/mockStocks';
 import { NaverSource, fetchNaverDirectory, fetchNaverRankings } from './market/naver';
 import type { MarketDataProvider } from './market/provider';
+import { ReplayStore } from './replay/store';
 import { openDb } from './trading/db';
 import { AlertService } from './trading/alerts';
 import { PushService, loadVapidKeys } from './trading/push';
@@ -58,7 +59,7 @@ trading.start();
 const vapid = loadVapidKeys(join(dataDir, 'vapid.json'));
 // 푸시 서비스가 문제 있을 때 연락할 주소 (배포할 때 본인 주소로 바꾸기)
 const push = new PushService(db, vapid.publicKey, PushService.webPushSender(vapid, process.env.VAPID_SUBJECT ?? 'mailto:admin@example.com'));
-const app = await buildApp({ provider, trading, watchlists: new WatchlistService(db), alerts: new AlertService(db), push, logger: true });
+const app = await buildApp({ provider, trading, watchlists: new WatchlistService(db), alerts: new AlertService(db), push, replay: new ReplayStore(db), logger: true });
 await app.listen({ port, host });
 
 const shutdown = async () => {

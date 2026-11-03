@@ -141,6 +141,21 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (user_id, key)
   );
   `,
+  // 리플레이 결과
+  `
+  CREATE TABLE replay_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL DEFAULT 1,
+    scenario_id TEXT NOT NULL,
+    codes TEXT NOT NULL DEFAULT '[]',
+    start_cash REAL NOT NULL,
+    final_value REAL NOT NULL,
+    return_rate REAL NOT NULL,
+    trade_count INTEGER NOT NULL,
+    finished_at INTEGER NOT NULL
+  );
+  CREATE INDEX replay_results_by_time ON replay_results(user_id, finished_at);
+  `,
 ];
 
 /** DB 열기 + 스키마 맞추기. ':memory:'는 테스트용 */

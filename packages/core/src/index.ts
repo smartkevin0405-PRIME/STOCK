@@ -11,3 +11,4 @@ export * from './fx';
 export * from './search';
 export * from './stats';
 export * from './coach';
+export * from './replay';
