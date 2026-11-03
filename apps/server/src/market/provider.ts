@@ -1,4 +1,4 @@
-import type { Candle, CandleInterval, DataStatus, IndexQuote, Quote, StockInfo } from '@stock/shared';
+import type { Candle, CandleInterval, DataStatus, IndexQuote, Market, Quote, RankingItem, RankingType, StockInfo } from '@stock/shared';
 
 /**
  * 시세 공급자 공통 인터페이스. 구현체만 바꿔 끼우면 됨.
@@ -15,6 +15,8 @@ export interface MarketDataProvider {
   getQuotes(codes: string[]): Promise<Quote[]>;
   getCandles(code: string, interval: CandleInterval, limit: number): Promise<Candle[]>;
   getIndices(): Promise<IndexQuote[]>;
+  /** 급상승·급하락·거래대금 순위 (market 없으면 국내+미국) */
+  getRankings(type: RankingType, market?: Market): Promise<RankingItem[]>;
   /** 원/달러 기준환율 */
   getUsdKrw(): Promise<number>;
   /** 화면에 보이는 종목 (자주 갱신할 대상) */

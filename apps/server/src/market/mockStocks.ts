@@ -8,6 +8,7 @@ const kr = (code: string, exchange: 'KOSPI' | 'KOSDAQ', nameKo: string, nameEn: 
 });
 const us = (code: string, exchange: 'NASDAQ' | 'NYSE', nameKo: string, nameEn: string, basePrice: number, volatility = 0.018): MockStock => ({
   code, market: 'US', exchange, nameKo, nameEn, currency: 'USD', aliases: [nameKo], basePrice, volatility,
+  naverCode: exchange === 'NASDAQ' ? `${code}.O` : code,
 });
 
 export const MOCK_STOCKS: MockStock[] = [
@@ -51,3 +52,6 @@ export const MOCK_INDICES = [
   { symbol: '^GSPC', name: 'S&P 500', base: 5_800, volatility: 0.009 },
   { symbol: 'KRW=X', name: '원/달러', base: 1_385, volatility: 0.004 },
 ] as const;
+
+/** 실제 시세용 기본 종목 목록 (전체 목록 받기 전까지 사용) */
+export const SEED_STOCKS: StockInfo[] = MOCK_STOCKS.map(({ basePrice: _b, volatility: _v, ...s }) => s);

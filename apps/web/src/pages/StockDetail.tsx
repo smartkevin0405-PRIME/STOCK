@@ -42,10 +42,11 @@ export function StockDetail() {
   const ccy = stock.currency;
   const limits = priceLimits(stock.market, quote.prevClose);
 
+  const fmt = (v: number | undefined) => (v === undefined ? '-' : formatPrice(v, ccy));
   const info: [string, string][] = [
-    ['시가', formatPrice(quote.open, ccy)],
-    ['고가', formatPrice(quote.high, ccy)],
-    ['저가', formatPrice(quote.low, ccy)],
+    ['시가', fmt(quote.open)],
+    ['고가', fmt(quote.high)],
+    ['저가', fmt(quote.low)],
     ['전일 종가', formatPrice(quote.prevClose, ccy)],
     ['거래량', formatCompact(quote.volume)],
     ...(limits

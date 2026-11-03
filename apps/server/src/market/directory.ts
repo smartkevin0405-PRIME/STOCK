@@ -16,6 +16,14 @@ export class StockDirectory {
     return this.byCode.get(code) ?? this.byCode.get(code.toUpperCase());
   }
 
+  /** 없는 종목만 추가 (순위 목록에서 처음 보는 종목 등) */
+  add(stock: StockInfo): StockInfo {
+    const existing = this.get(stock.code);
+    if (existing) return existing;
+    this.byCode.set(stock.code, stock);
+    return stock;
+  }
+
   /** 전체 교체. 기존 별칭(한글명 등)은 유지 */
   replace(stocks: readonly StockInfo[]): void {
     const prev = new Map(this.byCode);

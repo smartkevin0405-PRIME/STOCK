@@ -1,0 +1,92 @@
+{
+ "pollingInterval": 7000,
+ "datas": [
+  {
+   "itemCode": "KOSPI",
+   "stockName": "코스피",
+   "stockExchangeType": {
+    "code": "KS",
+    "zoneId": "Asia/Seoul",
+    "nationType": "KOR",
+    "delayTime": 0,
+    "startTime": "0900",
+    "endTime": "1530",
+    "closePriceSendTime": "1630",
+    "nameKor": "코스피",
+    "nameEng": "KOSPI",
+    "name": "KOSPI",
+    "nationCode": "KOR",
+    "nationName": "대한민국",
+    "stockType": "domestic"
+   },
+   "closePrice": "5,711.84",
+   "compareToPreviousClosePrice": "-147.24",
+   "compareToPreviousPrice": {
+    "code": "5",
+    "text": "하락",
+    "name": "FALLING"
+   },
+   "fluctuationsRatio": "-2.51",
+   "openPrice": "5,715.19",
+   "highPrice": "5,735.92",
+   "lowPrice": "5,638.06",
+   "accumulatedTradingVolume": "72,652천주",
+   "accumulatedTradingValue": "5,005,378백만",
+   "marketStatus": "OPEN",
+   "localTradedAt": "2026-11-03T10:31:27+09:00",
+   "symbolCode": "KOSPI",
+   "highPriceRaw": "5735.92",
+   "closePriceRaw": "5711.84",
+   "compareToPreviousClosePriceRaw": "-147.24",
+   "fluctuationsRatioRaw": "-2.51",
+   "openPriceRaw": "5715.19",
+   "accumulatedTradingVolumeRaw": "72652000",
+   "accumulatedTradingValueRaw": "5005378000000",
+   "lowPriceRaw": "5638.06"
+  },
+  {
+   "itemCode": "KOSDAQ",
+   "stockName": "코스닥",
+   "stockExchangeType": {
+    "code": "KQ",
+    "zoneId": "Asia/Seoul",
+    "nationType": "KOR",
+    "delayTime": 0,
+    "startTime": "0900",
+    "endTime": "1530",
+    "closePriceSendTime": "1630",
+    "nameKor": "코스닥",
+    "nameEng": "KOSDAQ",
+    "name": "KOSDAQ",
+    "nationCode": "KOR",
+    "nationName": "대한민국",
+    "stockType": "domestic"
+   },
+   "closePrice": "718.75",
+   "compareToPreviousClosePrice": "-15.61",
+   "compareToPreviousPrice": {
+    "code": "5",
+    "text": "하락",
+    "name": "FALLING"
+   },
+   "fluctuationsRatio": "-2.13",
+   "openPrice": "723.92",
+   "highPrice": "723.92",
+   "lowPrice": "708.73",
+   "accumulatedTradingVolume": "174,229천주",
+   "accumulatedTradingValue": "2,394,648백만",
+   "marketStatus": "OPEN",
+   "localTradedAt": "2026-11-03T10:31:27+09:00",
+   "symbolCode": "KOSDAQ",
+   "highPriceRaw": "723.92",
+   "closePriceRaw": "718.75",
+   "compareToPreviousClosePriceRaw": "-15.61",
+   "fluctuationsRatioRaw": "-2.13",
+   "openPriceRaw": "723.92",
+   "accumulatedTradingVolumeRaw": "174229000",
+   "accumulatedTradingValueRaw": "2394648000000",
+   "lowPriceRaw": "708.73"
+  }
+ ],
+ "time": "20261103103127"
+}

@@ -1,8 +1,9 @@
 import { priceLimits, roundToTick } from '@stock/core';
-import type { Candle, CandleInterval, DataStatus, IndexQuote, Quote, StockInfo } from '@stock/shared';
+import type { Candle, CandleInterval, DataStatus, IndexQuote, Market, Quote, RankingItem, RankingType, StockInfo } from '@stock/shared';
 import { aggregateCandles, byMinutes, byMonth, byWeek } from './candles';
 import { MOCK_INDICES, MOCK_STOCKS } from './mockStocks';
 import type { MarketDataProvider } from './provider';
+import { sortRankings } from './rankings';
 
 type Rng = () => number;
 
@@ -130,6 +131,13 @@ export class MockProvider implements MarketDataProvider {
       case '1M': out = aggregateCandles(days, byMonth); break;
     }
     return out.slice(-limit).map((c) => ({ ...c }));
+  }
+
+  async getRankings(type: RankingType, market?: Market): Promise<RankingItem[]> {
+    const items = [...this.series.values()]
+      .filter((s) => !market || s.stock.market === market)
+      .map((s) => ({ stock: s.stock, quote: this.toQuote(s) }));
+    return sortRankings(items, type, await this.getUsdKrw());
   }
 
   async getIndices(): Promise<IndexQuote[]> {

@@ -17,6 +17,9 @@ export interface MarketExtrasSource {
   fetchUsdKrw(): Promise<number>;
 }
 
+/** 소스가 원래 제공하지 않는 데이터 (실패로 치지 않고 다음 소스로 넘김) */
+export class UnsupportedError extends Error {}
+
 export interface FallbackOptions {
   /** 연속 몇 번 실패하면 잠시 건너뛸지 */
   failureThreshold?: number;
@@ -24,6 +27,8 @@ export interface FallbackOptions {
   cooldownMs?: number;
   now?: () => number;
 }
+
+type Op = 'quotes' | 'candles';
 
 interface Health {
   failures: number;
@@ -33,10 +38,11 @@ interface Health {
 /**
  * 여러 소스를 순서대로 시도. 앞 소스가 계속 실패하면 잠시 건너뛰고 다음 소스 사용.
  * 예: [네이버, 야후] → 네이버가 막히면 야후(20분 지연)로 자동 전환, 1분 뒤 네이버 재시도.
+ * 시세는 종목 단위로도 넘김: 네이버가 못 준 종목만 야후에 요청.
  */
 export class FallbackSource implements QuoteSource {
   readonly name: string;
-  private readonly health = new Map<QuoteSource, Health>();
+  private readonly health = new Map<string, Health>();
   private readonly failureThreshold: number;
   private readonly cooldownMs: number;
   private readonly now: () => number;
@@ -52,7 +58,6 @@ export class FallbackSource implements QuoteSource {
     this.failureThreshold = options.failureThreshold ?? 3;
     this.cooldownMs = options.cooldownMs ?? 60_000;
     this.now = options.now ?? Date.now;
-    for (const s of sources) this.health.set(s, { failures: 0, cooldownUntil: 0 });
     this.lastServed = sources[0]!;
   }
 
@@ -64,40 +69,73 @@ export class FallbackSource implements QuoteSource {
     return { source: this.lastServed.name, delayMinutes: this.lastServed.delayMinutes, ok: this.lastOk };
   }
 
-  fetchQuotes(stocks: StockInfo[]): Promise<Quote[]> {
-    return this.run((s) => s.fetchQuotes(stocks)).then(([quotes, s]) =>
-      quotes.map((q) => ({ ...q, delayMinutes: q.delayMinutes ?? s.delayMinutes })),
-    );
+  async fetchQuotes(stocks: StockInfo[]): Promise<Quote[]> {
+    let remaining = stocks;
+    const out: Quote[] = [];
+    const errors: unknown[] = [];
+    let served: QuoteSource | undefined;
+
+    for (const s of this.candidates('quotes')) {
+      if (remaining.length === 0) break;
+      try {
+        const quotes = await s.fetchQuotes(remaining);
+        this.markOk(s, 'quotes');
+        if (quotes.length === 0) continue;
+        served ??= s;
+        const got = new Set(quotes.map((q) => q.code));
+        out.push(...quotes.map((q) => ({ ...q, delayMinutes: q.delayMinutes ?? s.delayMinutes })));
+        remaining = remaining.filter((r) => !got.has(r.code));
+      } catch (e) {
+        errors.push(e);
+        if (!(e instanceof UnsupportedError)) this.markFail(s, 'quotes');
+      }
+    }
+
+    if (served) {
+      this.lastServed = served;
+      this.lastOk = true;
+    } else if (errors.length > 0) {
+      this.lastOk = false;
+      throw new AggregateError(errors, `모든 시세 소스 실패 (${this.name})`);
+    }
+    return out;
   }
 
-  fetchCandles(stock: StockInfo, interval: CandleInterval, limit: number): Promise<Candle[]> {
-    return this.run((s) => s.fetchCandles(stock, interval, limit)).then(([candles]) => candles);
+  async fetchCandles(stock: StockInfo, interval: CandleInterval, limit: number): Promise<Candle[]> {
+    const errors: unknown[] = [];
+    for (const s of this.candidates('candles')) {
+      try {
+        const candles = await s.fetchCandles(stock, interval, limit);
+        this.markOk(s, 'candles');
+        return candles;
+      } catch (e) {
+        errors.push(e);
+        if (!(e instanceof UnsupportedError)) this.markFail(s, 'candles');
+      }
+    }
+    throw new AggregateError(errors, `차트를 불러오지 못했어요 (${this.name})`);
+  }
+
+  private key(s: QuoteSource, op: Op): string {
+    return `${s.name}:${op}`;
   }
 
   /** 쉬는 중이 아닌 소스부터 순서대로. 전부 쉬는 중이면 전부 시도 */
-  private candidates(): QuoteSource[] {
+  private candidates(op: Op): QuoteSource[] {
     const now = this.now();
-    const ready = this.sources.filter((s) => this.health.get(s)!.cooldownUntil <= now);
+    const ready = this.sources.filter((s) => (this.health.get(this.key(s, op))?.cooldownUntil ?? 0) <= now);
     return ready.length > 0 ? ready : this.sources;
   }
 
-  private async run<T>(fn: (s: QuoteSource) => Promise<T>): Promise<[T, QuoteSource]> {
-    const errors: unknown[] = [];
-    for (const s of this.candidates()) {
-      try {
-        const result = await fn(s);
-        this.health.set(s, { failures: 0, cooldownUntil: 0 });
-        this.lastServed = s;
-        this.lastOk = true;
-        return [result, s];
-      } catch (e) {
-        errors.push(e);
-        const h = this.health.get(s)!;
-        h.failures += 1;
-        if (h.failures >= this.failureThreshold) h.cooldownUntil = this.now() + this.cooldownMs;
-      }
-    }
-    this.lastOk = false;
-    throw new AggregateError(errors, `모든 시세 소스 실패 (${this.name})`);
+  private markOk(s: QuoteSource, op: Op): void {
+    this.health.delete(this.key(s, op));
+  }
+
+  private markFail(s: QuoteSource, op: Op): void {
+    const k = this.key(s, op);
+    const h = this.health.get(k) ?? { failures: 0, cooldownUntil: 0 };
+    h.failures += 1;
+    if (h.failures >= this.failureThreshold) h.cooldownUntil = this.now() + this.cooldownMs;
+    this.health.set(k, h);
   }
 }

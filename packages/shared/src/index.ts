@@ -14,15 +14,18 @@ export interface StockInfo {
   currency: Currency;
   /** 검색용 별칭 (예: AAPL → "애플") */
   aliases?: string[];
+  /** 네이버 해외주식 코드 (예: AAPL.O, BRKb) */
+  naverCode?: string;
 }
 
 export interface Quote {
   code: string;
   price: number;
   prevClose: number;
-  open: number;
-  high: number;
-  low: number;
+  /** 시세 소스에 따라 없을 수 있음 */
+  open?: number;
+  high?: number;
+  low?: number;
   volume: number;
   /** price - prevClose */
   change: number;
@@ -118,6 +121,13 @@ export type ServerMessage =
 
 /** 웹 → 서버 WebSocket 메시지 */
 export type ClientMessage = { type: 'subscribe'; codes: string[] };
+
+export type RankingType = 'gainers' | 'losers' | 'turnover';
+
+export interface RankingItem {
+  stock: StockInfo;
+  quote: Quote;
+}
 
 export function currencyOf(market: Market): Currency {
   return market === 'KR' ? 'KRW' : 'USD';

@@ -1,12 +1,16 @@
-import type { Candle, CandleInterval, DataStatus, IndexQuote, Market, Quote, StockInfo } from '@stock/shared';
+import { isMarketOpen } from '@stock/core';
+import type { Candle, CandleInterval, DataStatus, IndexQuote, Market, Quote, RankingItem, RankingType, StockInfo } from '@stock/shared';
 import type { StockDirectory } from './directory';
 import type { MarketDataProvider } from './provider';
+import { sortRankings } from './rankings';
 import type { FallbackSource, MarketExtrasSource } from './sources';
 
 export interface LiveProviderOptions {
   directory: StockDirectory;
   sources: Record<Market, FallbackSource>;
   extras: MarketExtrasSource;
+  /** 시장별 순위 (네이버) */
+  rankings?: (type: RankingType, market: Market) => Promise<RankingItem[]>;
   /** 화면에 보이는 종목 갱신 간격 */
   watchIntervalMs?: number;
   /** 지수·환율 갱신 간격 */
@@ -15,6 +19,10 @@ export interface LiveProviderOptions {
   quoteTtlMs?: number;
   /** 한 번에 요청할 최대 종목 수 */
   batchSize?: number;
+  /** 장이 닫힌 시장의 종목은 이 간격으로만 갱신 */
+  closedIntervalMs?: number;
+  /** 순위 캐시 시간 */
+  rankingTtlMs?: number;
   now?: () => number;
 }
 
@@ -45,7 +53,8 @@ export class LiveProvider implements MarketDataProvider {
   private timers: ReturnType<typeof setInterval>[] = [];
   private polling = false;
 
-  private readonly o: Required<Omit<LiveProviderOptions, 'directory' | 'sources' | 'extras'>>;
+  private readonly rankingCache = new Map<string, Cached<RankingItem[]>>();
+  private readonly o: Required<Omit<LiveProviderOptions, 'directory' | 'sources' | 'extras' | 'rankings'>>;
 
   constructor(private readonly opts: LiveProviderOptions) {
     this.o = {
@@ -53,6 +62,8 @@ export class LiveProvider implements MarketDataProvider {
       extrasIntervalMs: opts.extrasIntervalMs ?? 30_000,
       quoteTtlMs: opts.quoteTtlMs ?? 2_500,
       batchSize: opts.batchSize ?? 20,
+      closedIntervalMs: opts.closedIntervalMs ?? 60_000,
+      rankingTtlMs: opts.rankingTtlMs ?? 15_000,
       now: opts.now ?? Date.now,
     };
   }
@@ -122,6 +133,31 @@ export class LiveProvider implements MarketDataProvider {
     }
   }
 
+  async getRankings(type: RankingType, market?: Market): Promise<RankingItem[]> {
+    if (!this.opts.rankings) return [];
+    const key = `${type}:${market ?? 'ALL'}`;
+    const now = this.o.now();
+    const hit = this.rankingCache.get(key);
+    if (hit && now - hit.at < this.o.rankingTtlMs) return hit.value;
+
+    const markets: Market[] = market ? [market] : ['KR', 'US'];
+    const lists = await Promise.allSettled(markets.map((m) => this.opts.rankings!(type, m)));
+    const items = lists.flatMap((l) => (l.status === 'fulfilled' ? l.value : []));
+    if (items.length === 0 && lists.some((l) => l.status === 'rejected')) {
+      if (hit) return hit.value;
+      throw new Error('순위를 불러오지 못했어요');
+    }
+    const usdKrw = this.usdKrw?.value ?? 1_400;
+    const value = sortRankings(
+      items.map((x) => ({ stock: this.opts.directory.add(x.stock), quote: x.quote })),
+      type,
+      usdKrw,
+    );
+    for (const x of value) this.store(x.quote);
+    this.rankingCache.set(key, { value, at: now });
+    return value;
+  }
+
   async getIndices(): Promise<IndexQuote[]> {
     if (!this.indices) await this.refreshExtras().catch(() => undefined);
     return this.indices?.value ?? [];
@@ -139,7 +175,16 @@ export class LiveProvider implements MarketDataProvider {
     if (this.polling || this.watched.size === 0) return;
     this.polling = true;
     try {
-      await this.fetchAndStore([...this.watched]);
+      // 장이 닫힌 시장은 가격이 거의 안 변하니 1분에 한 번만
+      const now = this.o.now();
+      const open: Record<Market, boolean> = { KR: isMarketOpen('KR', now), US: isMarketOpen('US', now) };
+      const due = [...this.watched].filter((code) => {
+        const market = this.opts.directory.get(code)?.market;
+        if (!market || open[market]) return true;
+        const at = this.quotes.get(code)?.at ?? 0;
+        return now - at >= this.o.closedIntervalMs;
+      });
+      if (due.length) await this.fetchAndStore(due);
     } finally {
       this.polling = false;
     }

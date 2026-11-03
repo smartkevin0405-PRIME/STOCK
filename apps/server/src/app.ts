@@ -66,23 +66,15 @@ export async function buildApp({ provider, logger = false, indicesIntervalMs = 3
     US: getMarketStatus('US'),
   }));
 
-  // 순위: 상승률·하락률·거래대금
-  app.get<{ Querystring: { type?: string; market?: string } }>('/api/rankings', async (req) => {
-    const type = req.query.type ?? 'gainers';
-    const stocks = (await provider.listStocks()).filter((s) => !req.query.market || s.market === req.query.market);
-    const quotes = await withQuotes(stocks.map((s) => s.code));
-    const usdKrw = await provider.getUsdKrw();
-    const items = stocks.flatMap((stock) => {
-      const quote = quotes.get(stock.code);
-      return quote ? [{ stock, quote }] : [];
-    });
-    const turnover = (x: (typeof items)[number]) => x.quote.price * x.quote.volume * (x.stock.currency === 'USD' ? usdKrw : 1);
-    const sorters: Record<string, (a: (typeof items)[number], b: (typeof items)[number]) => number> = {
-      gainers: (a, b) => b.quote.changeRate - a.quote.changeRate,
-      losers: (a, b) => a.quote.changeRate - b.quote.changeRate,
-      turnover: (a, b) => turnover(b) - turnover(a),
-    };
-    return { items: items.sort(sorters[type] ?? sorters.gainers).slice(0, 20) };
+  // 순위: 급상승·급하락·거래대금
+  app.get<{ Querystring: { type?: string; market?: string } }>('/api/rankings', async (req, reply) => {
+    const type = (['gainers', 'losers', 'turnover'] as const).find((t) => t === req.query.type) ?? 'gainers';
+    const market = req.query.market === 'KR' || req.query.market === 'US' ? req.query.market : undefined;
+    try {
+      return { items: await provider.getRankings(type, market) };
+    } catch (e) {
+      return reply.code(502).send({ error: (e as Error).message });
+    }
   });
 
   // 실시간: 구독한 종목 시세 + 주기적 지수

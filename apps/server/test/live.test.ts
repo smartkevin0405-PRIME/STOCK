@@ -2,7 +2,7 @@ import type { Candle, Quote, StockInfo } from '@stock/shared';
 import { describe, expect, it } from 'vitest';
 import { StockDirectory } from '../src/market/directory';
 import { LiveProvider } from '../src/market/live';
-import { FallbackSource, type MarketExtrasSource, type QuoteSource } from '../src/market/sources';
+import { FallbackSource, UnsupportedError, type MarketExtrasSource, type QuoteSource } from '../src/market/sources';
 
 const SAMSUNG: StockInfo = { code: '005930', market: 'KR', exchange: 'KOSPI', nameKo: '삼성전자', nameEn: 'Samsung', currency: 'KRW' };
 const HYNIX: StockInfo = { code: '000660', market: 'KR', exchange: 'KOSPI', nameKo: 'SK하이닉스', nameEn: 'SK hynix', currency: 'KRW' };
@@ -75,6 +75,31 @@ describe('소스 자동 전환', () => {
     expect(src.status().source).toBe('naver');
   });
 
+  it('첫 소스가 못 준 종목만 다음 소스에 요청', async () => {
+    const naver = new FakeSource('naver');
+    const yahoo = new FakeSource('yahoo', 20);
+    naver.prices.set('005930', 70_000);
+    yahoo.prices.set('005930', 1).set('000660', 199_000);
+    const src = new FallbackSource([naver, yahoo]);
+    const quotes = await src.fetchQuotes([SAMSUNG, HYNIX]);
+    expect(quotes.map((q) => [q.code, q.price, q.delayMinutes])).toEqual([['005930', 70_000, 0], ['000660', 199_000, 20]]);
+    expect(yahoo.calls).toEqual([['000660']]);
+    expect(src.status().source).toBe('naver');
+  });
+
+  it('제공하지 않는 데이터는 실패로 치지 않음', async () => {
+    const naver = new FakeSource('naver');
+    naver.fetchCandles = async () => {
+      throw new UnsupportedError('no minute');
+    };
+    const yahoo = new FakeSource('yahoo');
+    const src = new FallbackSource([naver, yahoo], { failureThreshold: 1 });
+    await src.fetchCandles(APPLE, '1m', 10);
+    naver.prices.set('AAPL', 200);
+    const [q] = await src.fetchQuotes([APPLE]);
+    expect(q?.price).toBe(200); // 네이버가 시세에서는 여전히 1순위
+  });
+
   it('전부 실패하면 에러 + 상태 표시', async () => {
     const a = new FakeSource('a');
     a.failing = true;
@@ -84,8 +109,9 @@ describe('소스 자동 전환', () => {
   });
 });
 
-function setup() {
-  let now = 1_000_000;
+function setup(start = Date.parse('2026-11-03T01:00:00Z')) {
+  // 기본: 한국 장중(10시), 미국 장 마감
+  let now = start;
   const kr = new FakeSource('naver');
   const us = new FakeSource('yahoo');
   kr.prices.set('005930', 70_000).set('000660', 200_000);
@@ -95,6 +121,12 @@ function setup() {
     sources: { KR: new FallbackSource([kr]), US: new FallbackSource([us]) },
     extras,
     quoteTtlMs: 2_500,
+    closedIntervalMs: 60_000,
+    rankings: async (type, market) =>
+      market === 'KR'
+        ? [{ stock: { ...SAMSUNG }, quote: { code: '005930', price: 71_000, prevClose: 70_000, volume: 10, change: 1_000, changeRate: 1 / 70, timestamp: 0 } },
+           { stock: { code: '999999', market: 'KR', exchange: 'KOSDAQ', nameKo: '신규상장', nameEn: '', currency: 'KRW' }, quote: { code: '999999', price: 1_000, prevClose: 800, volume: 1, change: 200, changeRate: 0.25, timestamp: 0 } }]
+        : [{ stock: APPLE, quote: { code: 'AAPL', price: 300, prevClose: 200, volume: 1, change: 100, changeRate: 0.5, timestamp: 0 } }],
     now: () => now,
   });
   return { provider, kr, us, advance: (ms: number) => (now += ms) };
@@ -142,6 +174,28 @@ describe('실제 시세 공급자', () => {
 
     expect(got).toEqual(['005930:70000', '005930:70100']);
     expect(kr.calls.every((c) => c.length === 1 && c[0] === '005930')).toBe(true);
+  });
+
+  it('장이 닫힌 시장 종목은 1분에 한 번만', async () => {
+    const { provider, kr, us, advance } = setup();
+    provider.watch(['005930', 'AAPL']);
+    await provider.pollWatched();
+    advance(3_000);
+    await provider.pollWatched();
+    expect(kr.calls).toHaveLength(2); // 한국 장중 → 매번
+    expect(us.calls).toHaveLength(1); // 미국 마감 → 건너뜀
+    advance(60_000);
+    await provider.pollWatched();
+    expect(us.calls).toHaveLength(2);
+  });
+
+  it('순위: 국내+미국 합쳐서 정렬, 처음 보는 종목은 목록에 추가', async () => {
+    const { provider } = setup();
+    const items = await provider.getRankings('gainers');
+    expect(items.map((x) => x.stock.code)).toEqual(['AAPL', '999999', '005930']);
+    expect(await provider.getStock('999999')).toMatchObject({ nameKo: '신규상장' });
+    const [q] = await provider.getQuotes(['999999']);
+    expect(q?.price).toBe(1_000); // 순위에서 받은 시세 재사용
   });
 
   it('보이는 종목이 없으면 요청 안 함', async () => {

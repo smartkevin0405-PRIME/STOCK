@@ -10,7 +10,7 @@ export function Discover() {
   const [input, setInput] = useState('');
   const [query, setQuery] = useState('');
   const [ranking, setRanking] = useState<RankingType>('gainers');
-  const [market, setMarket] = useState<Market | 'ALL'>('ALL');
+  const [market, setMarket] = useState<Market | 'ALL'>('KR');
 
   useEffect(() => {
     const t = setTimeout(() => setQuery(input.trim()), 200);
@@ -51,9 +51,9 @@ export function Discover() {
           <Segmented
             size="sm"
             options={[
-              { value: 'ALL', label: '전체' },
               { value: 'KR', label: '국내' },
               { value: 'US', label: '해외' },
+              { value: 'ALL', label: '전체' },
             ] as const}
             value={market}
             onChange={setMarket}
