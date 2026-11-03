@@ -1,0 +1,331 @@
+{
+ "spark": {
+  "result": [
+   {
+    "symbol": "AAPL",
+    "response": [
+     {
+      "meta": {
+       "currency": "USD",
+       "symbol": "AAPL",
+       "exchangeName": "NMS",
+       "fullExchangeName": "NasdaqGS",
+       "instrumentType": "EQUITY",
+       "firstTradeDate": 345479400,
+       "regularMarketTime": 1793653201,
+       "hasPrePostMarketData": true,
+       "gmtoffset": -18000,
+       "timezone": "EST",
+       "exchangeTimezoneName": "America/New_York",
+       "regularMarketPrice": 338.32,
+       "regularMarketChangePercent": -1.831,
+       "fulldayPrice": 329.47,
+       "fulldayChange": -15.16,
+       "fulldayChangePercent": -4.399,
+       "fiftyTwoWeekHigh": 351.73,
+       "fiftyTwoWeekLow": 243.42,
+       "regularMarketDayHigh": 343.78,
+       "regularMarketDayLow": 335.84,
+       "regularMarketVolume": 64689155,
+       "longName": "Apple Inc.",
+       "shortName": "Apple Inc.",
+       "chartPreviousClose": 344.63,
+       "priceHint": 2,
+       "currentTradingPeriod": {
+        "pre": {
+         "timezone": "EST",
+         "start": 1793610000,
+         "end": 1793629800,
+         "gmtoffset": -18000
+        },
+        "regular": {
+         "timezone": "EST",
+         "start": 1793629800,
+         "end": 1793653200,
+         "gmtoffset": -18000
+        },
+        "post": {
+         "timezone": "EST",
+         "start": 1793653200,
+         "end": 1793667600,
+         "gmtoffset": -18000
+        }
+       },
+       "dataGranularity": "1d",
+       "range": "1d",
+       "validRanges": [
+        "1d",
+        "5d",
+        "1mo",
+        "3mo",
+        "6mo",
+        "1y",
+        "2y",
+        "5y",
+        "10y",
+        "ytd",
+        "max"
+       ]
+      },
+      "timestamp": [
+       1793653201
+      ],
+      "indicators": {
+       "quote": [
+        {
+         "close": [
+          338.32
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "symbol": "KRW=X",
+    "response": [
+     {
+      "meta": {
+       "currency": "KRW",
+       "symbol": "KRW=X",
+       "exchangeName": "CCY",
+       "fullExchangeName": "CCY",
+       "instrumentType": "CURRENCY",
+       "firstTradeDate": 1070236800,
+       "regularMarketTime": 1793669543,
+       "hasPrePostMarketData": false,
+       "gmtoffset": 0,
+       "timezone": "GMT",
+       "exchangeTimezoneName": "Europe/London",
+       "regularMarketPrice": 1342.88,
+       "regularMarketChangePercent": -0.1888,
+       "fulldayPrice": 1342.88,
+       "fulldayChange": -2.54,
+       "fulldayChangePercent": -0.1888,
+       "fiftyTwoWeekHigh": 1587.7,
+       "fiftyTwoWeekLow": 1319.52,
+       "regularMarketDayHigh": 1346.58,
+       "regularMarketDayLow": 1340.43,
+       "regularMarketVolume": 0,
+       "longName": "USD/KRW",
+       "shortName": "USD/KRW",
+       "chartPreviousClose": 1345.42,
+       "priceHint": 4,
+       "currentTradingPeriod": {
+        "pre": {
+         "timezone": "GMT",
+         "start": 1793664000,
+         "end": 1793664000,
+         "gmtoffset": 0
+        },
+        "regular": {
+         "timezone": "GMT",
+         "start": 1793664000,
+         "end": 1793750340,
+         "gmtoffset": 0
+        },
+        "post": {
+         "timezone": "GMT",
+         "start": 1793750340,
+         "end": 1793750340,
+         "gmtoffset": 0
+        }
+       },
+       "dataGranularity": "1d",
+       "range": "1d",
+       "validRanges": [
+        "1d",
+        "5d",
+        "1mo",
+        "3mo",
+        "6mo",
+        "1y",
+        "2y",
+        "5y",
+        "10y",
+        "ytd",
+        "max"
+       ]
+      },
+      "timestamp": [
+       1793669543
+      ],
+      "indicators": {
+       "quote": [
+        {
+         "close": [
+          1342.88
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "symbol": "005930.KS",
+    "response": [
+     {
+      "meta": {
+       "currency": "KRW",
+       "symbol": "005930.KS",
+       "exchangeName": "KSC",
+       "fullExchangeName": "KSE",
+       "instrumentType": "EQUITY",
+       "firstTradeDate": 946944000,
+       "regularMarketTime": 1793668345,
+       "hasPrePostMarketData": false,
+       "gmtoffset": 32400,
+       "timezone": "KST",
+       "exchangeTimezoneName": "Asia/Seoul",
+       "regularMarketPrice": 221000.0,
+       "regularMarketChangePercent": -3.493,
+       "fulldayPrice": 221000.0,
+       "fulldayChange": -8000.0,
+       "fulldayChangePercent": -3.493,
+       "fiftyTwoWeekHigh": 374500.0,
+       "fiftyTwoWeekLow": 94500.0,
+       "regularMarketDayHigh": 222250.0,
+       "regularMarketDayLow": 217000.0,
+       "regularMarketVolume": 3922899,
+       "longName": "Samsung Electronics Co., Ltd.",
+       "shortName": "SamsungElec",
+       "chartPreviousClose": 229000.0,
+       "priceHint": 2,
+       "currentTradingPeriod": {
+        "pre": {
+         "timezone": "KST",
+         "start": 1793658600,
+         "end": 1793664000,
+         "gmtoffset": 32400
+        },
+        "regular": {
+         "timezone": "KST",
+         "start": 1793664000,
+         "end": 1793685600,
+         "gmtoffset": 32400
+        },
+        "post": {
+         "timezone": "KST",
+         "start": 1793685600,
+         "end": 1793696400,
+         "gmtoffset": 32400
+        }
+       },
+       "dataGranularity": "1d",
+       "range": "1d",
+       "validRanges": [
+        "1d",
+        "5d",
+        "1mo",
+        "3mo",
+        "6mo",
+        "1y",
+        "2y",
+        "5y",
+        "10y",
+        "ytd",
+        "max"
+       ]
+      },
+      "timestamp": [
+       1793668345
+      ],
+      "indicators": {
+       "quote": [
+        {
+         "close": [
+          221000.0
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "symbol": "^KS11",
+    "response": [
+     {
+      "meta": {
+       "currency": "KRW",
+       "symbol": "^KS11",
+       "exchangeName": "KSC",
+       "fullExchangeName": "KSE",
+       "instrumentType": "INDEX",
+       "firstTradeDate": 850262400,
+       "regularMarketTime": 1793668340,
+       "hasPrePostMarketData": false,
+       "gmtoffset": 32400,
+       "timezone": "KST",
+       "exchangeTimezoneName": "Asia/Seoul",
+       "regularMarketPrice": 5702.94,
+       "regularMarketChangePercent": -2.665,
+       "fulldayPrice": 5702.94,
+       "fulldayChange": -156.14,
+       "fulldayChangePercent": -2.665,
+       "fiftyTwoWeekHigh": 9385.59,
+       "fiftyTwoWeekLow": 3833.35,
+       "regularMarketDayHigh": 5718.5,
+       "regularMarketDayLow": 5638.06,
+       "regularMarketVolume": 64664,
+       "longName": "KOSPI Composite Index",
+       "shortName": "KOSPI Composite Index",
+       "chartPreviousClose": 5859.08,
+       "priceHint": 2,
+       "currentTradingPeriod": {
+        "pre": {
+         "timezone": "KST",
+         "start": 1793658600,
+         "end": 1793664000,
+         "gmtoffset": 32400
+        },
+        "regular": {
+         "timezone": "KST",
+         "start": 1793664000,
+         "end": 1793685600,
+         "gmtoffset": 32400
+        },
+        "post": {
+         "timezone": "KST",
+         "start": 1793685600,
+         "end": 1793696400,
+         "gmtoffset": 32400
+        }
+       },
+       "dataGranularity": "1d",
+       "range": "1d",
+       "validRanges": [
+        "1d",
+        "5d",
+        "1mo",
+        "3mo",
+        "6mo",
+        "1y",
+        "2y",
+        "5y",
+        "10y",
+        "ytd",
+        "max"
+       ]
+      },
+      "timestamp": [
+       1793668340
+      ],
+      "indicators": {
+       "quote": [
+        {
+         "close": [
+          5702.94
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   }
+  ],
+  "error": null
+ }
+}

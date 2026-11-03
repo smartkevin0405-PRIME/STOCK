@@ -1,0 +1,25 @@
+{
+  "name": "@stock/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@fastify/static": "10.1.6",
+    "@fastify/websocket": "11.3.6",
+    "@stock/core": "*",
+    "@stock/shared": "*",
+    "fastify": "5.12.8",
+    "tsx": "4.23.15",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/web-push": "^3.6.4"
+  }
+}

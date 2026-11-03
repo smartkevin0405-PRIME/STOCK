@@ -1,0 +1,131 @@
+{
+ "chart": {
+  "result": [
+   {
+    "meta": {
+     "currency": "KRW",
+     "symbol": "005930.KS",
+     "exchangeName": "KSC",
+     "fullExchangeName": "KSE",
+     "instrumentType": "EQUITY",
+     "firstTradeDate": 946944000,
+     "regularMarketTime": 1793668455,
+     "hasPrePostMarketData": false,
+     "gmtoffset": 32400,
+     "timezone": "KST",
+     "exchangeTimezoneName": "Asia/Seoul",
+     "regularMarketPrice": 221250.0,
+     "regularMarketChangePercent": -3.384,
+     "fulldayPrice": 221250.0,
+     "fulldayChange": -7750.0,
+     "fulldayChangePercent": -3.384,
+     "fiftyTwoWeekHigh": 374500.0,
+     "fiftyTwoWeekLow": 94500.0,
+     "regularMarketDayHigh": 222250.0,
+     "regularMarketDayLow": 217000.0,
+     "regularMarketVolume": 3941855,
+     "longName": "Samsung Electronics Co., Ltd.",
+     "shortName": "SamsungElec",
+     "chartPreviousClose": 229000.0,
+     "previousClose": 229000.0,
+     "scale": 3,
+     "priceHint": 2,
+     "currentTradingPeriod": {
+      "pre": {
+       "timezone": "KST",
+       "end": 1793664000,
+       "start": 1793658600,
+       "gmtoffset": 32400
+      },
+      "regular": {
+       "timezone": "KST",
+       "end": 1793685600,
+       "start": 1793664000,
+       "gmtoffset": 32400
+      },
+      "post": {
+       "timezone": "KST",
+       "end": 1793696400,
+       "start": 1793685600,
+       "gmtoffset": 32400
+      }
+     },
+     "tradingPeriods": [
+      [
+       {
+        "timezone": "KST",
+        "end": 1793685600,
+        "start": 1793664000,
+        "gmtoffset": 32400
+       }
+      ]
+     ],
+     "dataGranularity": "5m",
+     "range": "1d",
+     "validRanges": [
+      "1d",
+      "5d",
+      "1mo",
+      "3mo",
+      "6mo",
+      "1y",
+      "2y",
+      "5y",
+      "10y",
+      "ytd",
+      "max"
+     ]
+    },
+    "timestamp": [
+     1793664000,
+     1793664300,
+     1793664600,
+     1793664900,
+     1793665200
+    ],
+    "indicators": {
+     "quote": [
+      {
+       "open": [
+        220500.0,
+        219000.0,
+        217500.0,
+        218500.0,
+        218750.0
+       ],
+       "close": [
+        219000.0,
+        218000.0,
+        218250.0,
+        218750.0,
+        218250.0
+       ],
+       "high": [
+        220500.0,
+        219000.0,
+        218750.0,
+        219500.0,
+        219500.0
+       ],
+       "low": [
+        218000.0,
+        217000.0,
+        217500.0,
+        218000.0,
+        218000.0
+       ],
+       "volume": [
+        543939,
+        395480,
+        200628,
+        218568,
+        281808
+       ]
+      }
+     ]
+    }
+   }
+  ],
+  "error": null
+ }
+}

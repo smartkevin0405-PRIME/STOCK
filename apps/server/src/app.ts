@@ -1,0 +1,227 @@
+import fastifyStatic from '@fastify/static';
+import websocket from '@fastify/websocket';
+import { getMarketStatus, searchStocks } from '@stock/core';
+import type { CandleInterval, ClientMessage, Quote, ServerMessage } from '@stock/shared';
+import Fastify from 'fastify';
+import type { AiProvider } from './ai/provider';
+import { registerAiRoutes } from './ai/routes';
+import { registerOrderBookRoute, type OrderBookFetcher } from './market/orderbookRoutes';
+import { registerCors } from './cors';
+import { registerAuth, type AuthService } from './auth';
+import type { MarketDataProvider } from './market/provider';
+import { registerAchievementRoutes } from './trading/achievementRoutes';
+import type { AchievementService } from './trading/achievements';
+import { registerReplayRoutes } from './replay/routes';
+import type { ReplayStore } from './replay/store';
+import { registerAlertRoutes, startNotifier } from './trading/alertRoutes';
+import type { AlertService } from './trading/alerts';
+import { registerFcmRoutes } from './trading/fcmRoutes';
+import type { PushService } from './trading/push';
+import { registerTradingRoutes } from './trading/routes';
+import type { TradingService } from './trading/service';
+import type { WatchlistService } from './trading/watchlist';
+
+const INTERVALS: readonly CandleInterval[] = ['1m', '5m', '15m', '60m', '1d', '1w', '1M'];
+
+export interface AppOptions {
+  provider: MarketDataProvider;
+  /** 모의투자 계좌 (없으면 시세 API만) */
+  trading?: TradingService;
+  /** 관심종목 그룹 */
+  watchlists?: WatchlistService;
+  /** 가격 알림 (+ 폰 푸시) */
+  alerts?: AlertService;
+  push?: PushService;
+  /** 챌린지·업적 */
+  achievements?: AchievementService;
+  /** 타임머신 리플레이 결과 저장소 */
+  replay?: ReplayStore;
+  logger?: boolean;
+  /** 비밀번호 로그인 (없으면 로그인 없이) */
+  auth?: AuthService;
+  /** 빌드된 웹앱 폴더 (있으면 같은 포트에서 같이 서비스) */
+  webDir?: string;
+  /** 앞에 Caddy 같은 프록시가 있을 때 X-Forwarded-For로 IP 확인 */
+  trustProxy?: boolean;
+  /** 지수 브로드캐스트 간격 (ms) */
+  indicesIntervalMs?: number;
+  /** 10단계 호가 (한투 키 있을 때만) */
+  orderBook?: OrderBookFetcher;
+  /** AI API (키 있을 때만). 없어도 질문 만들기는 됨 */
+  ai?: AiProvider | null;
+}
+
+export async function buildApp({
+  provider,
+  trading,
+  watchlists,
+  alerts,
+  push,
+  achievements,
+  replay,
+  orderBook,
+  ai,
+  auth,
+  webDir,
+  trustProxy = false,
+  logger = false,
+  indicesIntervalMs = 3_000,
+}: AppOptions) {
+  const app = Fastify({ logger, trustProxy });
+  // CORS 먼저 (앱의 사전 요청 OPTIONS가 로그인 검사에 막히지 않게)
+  registerCors(app);
+  await app.register(websocket);
+  registerAuth(app, auth);
+  if (trading) registerTradingRoutes(app, trading, provider, watchlists);
+  if (trading) registerAiRoutes(app, { trading, provider, ai: ai ?? null });
+  if (alerts) registerAlertRoutes(app, { provider, alerts, push });
+  if (achievements) registerAchievementRoutes(app, achievements);
+  if (replay) registerReplayRoutes(app, { provider, store: replay });
+  registerOrderBookRoute(app, provider, orderBook);
+  registerFcmRoutes(app, push);
+
+  const withQuotes = async (codes: string[]) => {
+    const quotes = await provider.getQuotes(codes);
+    return new Map(quotes.map((q) => [q.code, q]));
+  };
+
+  app.get('/api/health', async () => ({ ok: true, auth: !!auth, ...provider.status() }));
+
+  // 검색 (q 없으면 전체)
+  app.get<{ Querystring: { q?: string; limit?: string } }>('/api/stocks', async (req) => {
+    const all = await provider.listStocks();
+    const limit = Math.min(Number(req.query.limit) || 30, 100);
+    const q = req.query.q?.trim() ?? '';
+    const stocks = q ? searchStocks(all, q, limit) : all.slice(0, limit);
+    const quotes = await withQuotes(stocks.map((s) => s.code));
+    return { items: stocks.map((stock) => ({ stock, quote: quotes.get(stock.code) ?? null })) };
+  });
+
+  app.get<{ Params: { code: string } }>('/api/stocks/:code', async (req, reply) => {
+    const stock = await provider.getStock(req.params.code);
+    if (!stock) return reply.code(404).send({ error: '종목을 찾을 수 없어요' });
+    const [quote] = await provider.getQuotes([stock.code]);
+    return { stock, quote: quote ?? null };
+  });
+
+  app.get<{ Querystring: { codes?: string } }>('/api/quotes', async (req) => {
+    const codes = (req.query.codes ?? '').split(',').map((c) => c.trim()).filter(Boolean).slice(0, 100);
+    return { quotes: await provider.getQuotes(codes) };
+  });
+
+  app.get<{ Params: { code: string }; Querystring: { interval?: string; limit?: string } }>(
+    '/api/candles/:code',
+    async (req, reply) => {
+      const interval = (req.query.interval ?? '1d') as CandleInterval;
+      if (!INTERVALS.includes(interval)) return reply.code(400).send({ error: `interval은 ${INTERVALS.join(', ')} 중 하나` });
+      const limit = Math.min(Number(req.query.limit) || 300, 1_000);
+      return { candles: await provider.getCandles(req.params.code, interval, limit) };
+    },
+  );
+
+  app.get('/api/indices', async () => ({
+    indices: await provider.getIndices(),
+    usdKrw: await provider.getUsdKrw(),
+  }));
+
+  app.get('/api/market-status', async () => ({
+    KR: getMarketStatus('KR'),
+    US: getMarketStatus('US'),
+  }));
+
+  // 순위: 급상승·급하락·거래대금
+  app.get<{ Querystring: { type?: string; market?: string } }>('/api/rankings', async (req, reply) => {
+    const type = (['gainers', 'losers', 'turnover'] as const).find((t) => t === req.query.type) ?? 'gainers';
+    const market = req.query.market === 'KR' || req.query.market === 'US' ? req.query.market : undefined;
+    try {
+      return { items: await provider.getRankings(type, market) };
+    } catch (e) {
+      return reply.code(502).send({ error: (e as Error).message });
+    }
+  });
+
+  // 실시간: 구독한 종목 시세 + 주기적 지수
+  const clients = new Set<{ send: (m: ServerMessage) => void; codes: Set<string> }>();
+  const syncWatch = () => {
+    const all = new Set<string>();
+    for (const c of clients) for (const code of c.codes) all.add(code);
+    provider.watch('screens', all);
+  };
+
+  const offQuote = provider.onQuote((quote: Quote) => {
+    for (const c of clients) if (c.codes.has(quote.code)) c.send({ type: 'quote', quote });
+  });
+  const indicesTimer = setInterval(async () => {
+    if (clients.size === 0) return;
+    const indices = await provider.getIndices();
+    for (const c of clients) c.send({ type: 'indices', indices });
+  }, indicesIntervalMs);
+
+  // 체결·주문·환전·리셋 알림은 모든 화면에
+  const offAccount = trading?.onEvent((e) => {
+    for (const c of clients) c.send({ type: 'account', ...e });
+  });
+
+  // 업적·챌린지 달성 알림
+  const offAchievement = achievements?.onUnlock((u) => {
+    for (const c of clients) c.send({ type: 'achievement', ...u });
+  });
+
+  // 가격 알림: 시세 확인 → 폰 푸시 + 앱 화면
+  const stopNotifier = alerts
+    ? startNotifier({
+        provider,
+        alerts,
+        push,
+        trading,
+        broadcast: (alert, stock) => {
+          for (const c of clients) c.send({ type: 'alert', alert, ...(stock ? { stock } : {}) });
+        },
+      })
+    : undefined;
+
+  app.addHook('onClose', async () => {
+    stopNotifier?.();
+    offAccount?.();
+    offAchievement?.();
+    offQuote();
+    clearInterval(indicesTimer);
+  });
+
+  app.get('/ws', { websocket: true }, (socket) => {
+    const client = {
+      codes: new Set<string>(),
+      send: (m: ServerMessage) => {
+        if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(m));
+      },
+    };
+    clients.add(client);
+    socket.on('message', (raw: Buffer) => {
+      try {
+        const msg = JSON.parse(raw.toString()) as ClientMessage;
+        if (msg.type === 'subscribe' && Array.isArray(msg.codes)) {
+          client.codes = new Set(msg.codes.slice(0, 200).map(String));
+          syncWatch();
+        }
+      } catch {
+        // 잘못된 메시지는 무시
+      }
+    });
+    socket.on('close', () => {
+      clients.delete(client);
+      syncWatch();
+    });
+  });
+
+  if (webDir) {
+    await app.register(fastifyStatic, {
+      root: webDir,
+      // 파일명에 해시가 붙은 빌드 결과는 오래 캐시
+      setHeaders: (reply, path) => {
+        if (/[\\/]assets[\\/]/.test(path)) reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+      },
+    });
+  }
+
+  return app;
+}

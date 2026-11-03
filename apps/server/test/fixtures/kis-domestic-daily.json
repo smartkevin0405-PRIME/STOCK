@@ -1,0 +1,21 @@
+{
+  "_fixture": "예시 응답 (실제 호출 아님). 한투 공식 open-trading-api examples_llm/domestic_stock/inquire_daily_itemchartprice/chk_inquire_daily_itemchartprice.py의 필드 이름으로 만듦. output2는 최신 날짜부터. 값은 설명용",
+  "rt_cd": "0",
+  "msg_cd": "MCA00000",
+  "msg1": "정상처리 되었습니다.",
+  "output1": {
+    "prdy_vrss": "-500",
+    "prdy_vrss_sign": "5",
+    "prdy_ctrt": "-0.70",
+    "stck_prdy_clpr": "71000",
+    "acml_vol": "12345678",
+    "hts_kor_isnm": "삼성전자",
+    "stck_prpr": "70500",
+    "stck_shrn_iscd": "005930"
+  },
+  "output2": [
+    { "stck_bsop_date": "20261103", "stck_clpr": "70500", "stck_oprc": "71000", "stck_hgpr": "71200", "stck_lwpr": "70300", "acml_vol": "12345678", "acml_tr_pbmn": "870414000000", "flng_cls_code": "00", "prtt_rate": "0.00", "mod_yn": "N", "prdy_vrss_sign": "5", "prdy_vrss": "-500", "revl_issu_reas": "" },
+    { "stck_bsop_date": "20261102", "stck_clpr": "71000", "stck_oprc": "70200", "stck_hgpr": "71300", "stck_lwpr": "70100", "acml_vol": "15000000", "acml_tr_pbmn": "1060000000000", "flng_cls_code": "00", "prtt_rate": "0.00", "mod_yn": "N", "prdy_vrss_sign": "2", "prdy_vrss": "900", "revl_issu_reas": "" },
+    { "stck_bsop_date": "20261030", "stck_clpr": "70100", "stck_oprc": "69800", "stck_hgpr": "70400", "stck_lwpr": "69500", "acml_vol": "11000000", "acml_tr_pbmn": "770000000000", "flng_cls_code": "00", "prtt_rate": "0.00", "mod_yn": "N", "prdy_vrss_sign": "2", "prdy_vrss": "300", "revl_issu_reas": "" }
+  ]
+}
