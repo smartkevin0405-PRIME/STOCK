@@ -1,5 +1,8 @@
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { buildApp } from './app';
+import { AuthService } from './auth';
 import { StockDirectory } from './market/directory';
 import { DirectoryStore } from './market/directoryStore';
 import { LiveExtras } from './market/extras';
@@ -58,7 +61,24 @@ trading.start();
 const vapid = loadVapidKeys(join(dataDir, 'vapid.json'));
 // 푸시 서비스가 문제 있을 때 연락할 주소 (배포할 때 본인 주소로 바꾸기)
 const push = new PushService(db, vapid.publicKey, PushService.webPushSender(vapid, process.env.VAPID_SUBJECT ?? 'mailto:admin@example.com'));
-const app = await buildApp({ provider, trading, watchlists: new WatchlistService(db), alerts: new AlertService(db), push, logger: true });
+// 비밀번호 로그인: APP_PASSWORD가 있을 때만
+const auth = AuthService.fromEnv(dataDir);
+if (!auth && !['localhost', '127.0.0.1', '::1'].includes(host)) {
+  console.warn(`[auth] APP_PASSWORD가 없어서 로그인 없이 ${host}:${port}에 열려요. 외부에 공개할 땐 꼭 설정하세요`);
+}
+// 빌드된 웹앱이 있으면 같은 포트에서 서비스 (npm run build 후)
+const webDir = process.env.WEB_DIR ?? fileURLToPath(new URL('../../web/dist', import.meta.url));
+const app = await buildApp({
+  provider,
+  trading,
+  watchlists: new WatchlistService(db),
+  alerts: new AlertService(db),
+  push,
+  auth,
+  webDir: existsSync(join(webDir, 'index.html')) ? webDir : undefined,
+  trustProxy: process.env.TRUST_PROXY === '1',
+  logger: true,
+});
 await app.listen({ port, host });
 
 const shutdown = async () => {

@@ -1,0 +1,7 @@
+# 도메인은 .env의 DOMAIN (예: mystock.duckdns.org)
+# Caddy가 Let's Encrypt 인증서를 자동으로 받고 갱신해요
+{$DOMAIN} {
+	encode zstd gzip
+	# WebSocket(/ws)도 그대로 전달됨
+	reverse_proxy app:8787
+}

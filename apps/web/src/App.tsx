@@ -3,6 +3,8 @@ import { HashRouter, Route, Routes, useLocation } from 'react-router';
 import { TabBar } from './components/Layout';
 import { Toaster } from './components/Toaster';
 import { describeAlert } from './lib/alerts';
+import { api } from './lib/api';
+import { initAuth, useAuthState } from './lib/auth';
 import { live } from './lib/live';
 import { handleAccountEvent } from './lib/notify';
 import { registerServiceWorker } from './lib/push';
@@ -13,6 +15,7 @@ import { Discover } from './pages/Discover';
 import { Fx } from './pages/Fx';
 import { Home } from './pages/Home';
 import { Journal } from './pages/Journal';
+import { Login } from './pages/Login';
 import { More } from './pages/More';
 import { Orders } from './pages/Orders';
 import { Seasons } from './pages/Seasons';
@@ -58,6 +61,16 @@ function Shell() {
 
 // HashRouter: 나중에 Capacitor(APK)에서도 주소 처리 없이 그대로 동작
 export function App() {
+  // 서버에 비밀번호가 있으면 로그인부터
+  const auth = useAuthState();
+  useEffect(() => {
+    api.health().then(
+      (h) => initAuth(!!h.auth),
+      () => initAuth(false),
+    );
+  }, []);
+  if (auth === 'checking') return null;
+  if (auth === 'out') return <Login />;
   return (
     <HashRouter>
       <Shell />
