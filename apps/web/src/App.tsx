@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect, type ComponentType } from 'react';
 import { HashRouter, Route, Routes, useLocation } from 'react-router';
 import { TabBar } from './components/Layout';
 import { Toaster } from './components/Toaster';
@@ -13,22 +13,27 @@ import { registerServiceWorker } from './lib/push';
 import { needsServerSetup } from './lib/server';
 import { useTheme } from './lib/theme';
 import { toast } from './lib/toast';
-import { Achievements } from './pages/Achievements';
-import { Alerts } from './pages/Alerts';
-import { Discover } from './pages/Discover';
-import { Fx } from './pages/Fx';
 import { Home } from './pages/Home';
-import { Journal } from './pages/Journal';
 import { Login } from './pages/Login';
-import { More } from './pages/More';
-import { Orders } from './pages/Orders';
-import { Replay } from './pages/Replay';
-import { ReplayPlay } from './pages/ReplayPlay';
-import { Seasons } from './pages/Seasons';
-import { ServerSetup, ServerSetupFirst } from './pages/ServerSetup';
-import { Settings } from './pages/Settings';
-import { StockDetail } from './pages/StockDetail';
-import { Watchlist } from './pages/Watchlist';
+import { ServerSetupFirst } from './pages/ServerSetup';
+
+// 홈 말고는 그 화면을 열 때 내려받음 (첫 화면을 빨리 띄우려고)
+const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
+  lazy(() => load().then((m) => ({ default: m[name] })));
+const Achievements = page(() => import('./pages/Achievements'), 'Achievements');
+const Alerts = page(() => import('./pages/Alerts'), 'Alerts');
+const Discover = page(() => import('./pages/Discover'), 'Discover');
+const Fx = page(() => import('./pages/Fx'), 'Fx');
+const Journal = page(() => import('./pages/Journal'), 'Journal');
+const More = page(() => import('./pages/More'), 'More');
+const Orders = page(() => import('./pages/Orders'), 'Orders');
+const Replay = page(() => import('./pages/Replay'), 'Replay');
+const ReplayPlay = page(() => import('./pages/ReplayPlay'), 'ReplayPlay');
+const Seasons = page(() => import('./pages/Seasons'), 'Seasons');
+const ServerSetup = page(() => import('./pages/ServerSetup'), 'ServerSetup');
+const Settings = page(() => import('./pages/Settings'), 'Settings');
+const StockDetail = page(() => import('./pages/StockDetail'), 'StockDetail');
+const Watchlist = page(() => import('./pages/Watchlist'), 'Watchlist');
 
 const SUB_PAGES = ['/stock/', '/orders', '/fx', '/seasons', '/alerts', '/achievements', '/replay', '/server', '/settings'];
 
@@ -51,6 +56,7 @@ function Shell() {
 
   return (
     <>
+      <Suspense fallback={<div className="p-8 text-center text-sm text-sub">불러오는 중…</div>}>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/watchlist" element={<Watchlist />} />
@@ -68,6 +74,7 @@ function Shell() {
         <Route path="/server" element={<ServerSetup />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
+      </Suspense>
       {showTabs && <TabBar />}
       <Toaster />
     </>
