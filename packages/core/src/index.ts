@@ -9,3 +9,5 @@ export * from './orders';
 export * from './portfolio';
 export * from './fx';
 export * from './search';
+export * from './stats';
+export * from './coach';
