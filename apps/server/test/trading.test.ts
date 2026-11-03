@@ -1,4 +1,4 @@
-import type { DataStatus, Quote, StockInfo } from '@stock/shared';
+import type { Candle, DataStatus, Quote, StockInfo } from '@stock/shared';
 import { describe, expect, it } from 'vitest';
 import type { MarketDataProvider } from '../src/market/provider';
 import { openDb } from '../src/trading/db';
@@ -18,6 +18,10 @@ class TestProvider implements MarketDataProvider {
   prices = new Map<string, number>([['005930', 70_000], ['AAPL', 200]]);
   marketStatus: Quote['marketStatus'];
   watched = new Map<string, string[]>();
+  /** 5분봉 (앱이 꺼져 있던 동안 따라잡기용) */
+  candles: Candle[] = [];
+  candleCalls = 0;
+  candleError = false;
   async start() {}
   stop() {}
   status(): DataStatus {
@@ -39,8 +43,10 @@ class TestProvider implements MarketDataProvider {
         : [{ code, price, prevClose, volume: 0, change: price - prevClose, changeRate: (price - prevClose) / prevClose, timestamp: 0, ...(this.marketStatus ? { marketStatus: this.marketStatus } : {}) }];
     });
   }
-  async getCandles() {
-    return [];
+  async getCandles(): Promise<Candle[]> {
+    this.candleCalls++;
+    if (this.candleError) throw new Error('candles down');
+    return this.candles;
   }
   async getIndices() {
     return [];
@@ -309,5 +315,108 @@ describe('매매일지', () => {
     svc.saveNote(order.id, { text: '충동구매였다. 다음엔 분할로', tags: ['충동', '분할매수'] });
     expect(svc.journal()[0]?.note).toMatchObject({ text: '충동구매였다. 다음엔 분할로', tags: ['충동', '분할매수'] });
     expect(() => svc.saveNote('nope', { text: 'x', tags: [] })).toThrow('주문을 찾을 수 없어요');
+  });
+});
+
+/** 5분봉 하나 (t: ISO 시각) */
+function bar(t: string, o: number, h: number, l: number, c: number): Candle {
+  return { time: Date.parse(t) / 1000, open: o, high: h, low: l, close: c, volume: 0 };
+}
+
+describe('앱이 꺼져 있던 동안 따라잡기', () => {
+  it('지정가 매수: 꺼져 있는 동안 가격이 닿았으면 장 마감이 지나도 그 봉 시각에 지정가로 체결', async () => {
+    const { svc, provider, setNow } = setup();
+    const { order } = await svc.placeOrder({ code: '005930', side: 'buy', type: 'limit', qty: 10, limitPrice: 69_000 });
+    await svc.processOpenOrders();
+    provider.candles = [
+      bar('2026-11-03T00:30:00Z', 70_000, 70_000, 60_000, 70_000), // 주문 전 → 무시
+      bar('2026-11-03T02:00:00Z', 69_800, 70_000, 69_100, 69_500),
+      bar('2026-11-03T03:00:00Z', 69_500, 69_600, 68_800, 69_200),
+    ];
+    setNow(KR_CLOSED);
+    await svc.processOpenOrders();
+    expect(svc.orders()[0]).toMatchObject({ id: order.id, status: 'filled', updatedAt: Date.parse('2026-11-03T03:00:00Z') });
+    expect(svc.fills()[0]).toMatchObject({ price: 69_000, qty: 10, executedAt: Date.parse('2026-11-03T03:00:00Z') });
+    expect(svc.view().cash.KRW).toBe(10_000_000 - 690_103);
+  });
+
+  it('닿은 적 없으면 전처럼 만료 취소', async () => {
+    const { svc, provider, setNow } = setup();
+    await svc.placeOrder({ code: '005930', side: 'buy', type: 'limit', qty: 10, limitPrice: 69_000 });
+    provider.candles = [bar('2026-11-03T02:00:00Z', 69_800, 70_000, 69_100, 69_500)];
+    setNow(KR_CLOSED);
+    await svc.processOpenOrders();
+    expect(svc.orders()[0]).toMatchObject({ status: 'cancelled', reason: expect.stringContaining('자동 취소') });
+    expect(svc.fills()).toHaveLength(0);
+  });
+
+  it('봉을 못 받으면 건너뛰고 전처럼 만료 취소', async () => {
+    const { svc, provider, setNow } = setup();
+    await svc.placeOrder({ code: '005930', side: 'buy', type: 'limit', qty: 10, limitPrice: 69_000 });
+    provider.candleError = true;
+    setNow(KR_CLOSED);
+    await svc.processOpenOrders();
+    expect(svc.orders()[0]?.status).toBe('cancelled');
+  });
+
+  it('지정가 매도: 고가가 닿은 봉에서 지정가로 체결', async () => {
+    const { svc, provider, setNow, events } = setup();
+    await svc.placeOrder({ code: '005930', side: 'buy', type: 'market', qty: 10 });
+    await svc.placeOrder({ code: '005930', side: 'sell', type: 'limit', qty: 10, limitPrice: 72_000 });
+    provider.candles = [
+      bar('2026-11-03T01:30:00Z', 70_500, 71_900, 70_400, 71_800),
+      bar('2026-11-03T02:00:00Z', 71_800, 72_500, 71_700, 71_000),
+    ];
+    provider.prices.set('005930', 71_000);
+    setNow(Date.parse('2026-11-03T03:00:00Z'));
+    await svc.processOpenOrders();
+    expect(svc.fills()[0]).toMatchObject({ side: 'sell', price: 72_000, executedAt: Date.parse('2026-11-03T02:00:00Z') });
+    expect(svc.view().positions).toEqual([]);
+    expect(events.at(-1)).toBe('fill');
+  });
+
+  it('예약 시장가: 장 시작 봉의 시가로 체결', async () => {
+    const { svc, provider, setNow } = setup(KR_CLOSED);
+    await svc.placeOrder({ code: '005930', side: 'buy', type: 'market', qty: 1 });
+    await svc.processOpenOrders();
+    provider.candles = [
+      bar('2026-11-03T06:25:00Z', 70_400, 70_600, 70_300, 70_500), // 전날 마지막 봉
+      bar('2026-11-03T07:00:00Z', 70_500, 70_500, 70_500, 70_500), // 장 밖 → 무시
+      bar('2026-11-04T00:00:00Z', 71_000, 71_500, 70_800, 71_400),
+      bar('2026-11-04T00:05:00Z', 72_000, 72_500, 71_900, 72_400),
+    ];
+    provider.prices.set('005930', 73_000);
+    setNow(Date.parse('2026-11-04T02:00:00Z'));
+    await svc.processOpenOrders();
+    const fill = svc.fills()[0];
+    expect(fill).toMatchObject({ price: 71_000, executedAt: KR_NEXT_OPEN });
+    expect(fill?.dayChangeRate).toBeCloseTo(500 / 70_500);
+  });
+
+  it('예약 지정가 매수: 시가가 지정가보다 낮게 시작하면 시가로 체결', async () => {
+    const { svc, provider, setNow } = setup(KR_CLOSED);
+    await svc.placeOrder({ code: '005930', side: 'buy', type: 'limit', qty: 1, limitPrice: 70_000 });
+    provider.candles = [bar('2026-11-04T00:00:00Z', 68_000, 68_500, 67_500, 68_200)];
+    setNow(Date.parse('2026-11-04T08:00:00Z'));
+    await svc.processOpenOrders();
+    expect(svc.fills()[0]).toMatchObject({ price: 68_000, executedAt: KR_NEXT_OPEN });
+    expect(svc.orders()[0]?.status).toBe('filled');
+  });
+
+  it('감시 공백이 1분 이하면 따라잡지 않음', async () => {
+    const { svc, provider, setNow } = setup();
+    await svc.placeOrder({ code: '005930', side: 'buy', type: 'limit', qty: 10, limitPrice: 69_000 });
+    await svc.processOpenOrders();
+    const calls = provider.candleCalls;
+    provider.candles = [bar('2026-11-03T01:00:00Z', 69_500, 69_500, 68_000, 69_400)];
+    setNow(KR_OPEN + 30_000);
+    await svc.processOpenOrders();
+    expect(provider.candleCalls).toBe(calls);
+    expect(svc.openOrders()).toHaveLength(1);
+
+    setNow(KR_OPEN + 30_000 + 61_000);
+    await svc.processOpenOrders();
+    expect(provider.candleCalls).toBe(calls + 1);
+    expect(svc.fills()[0]).toMatchObject({ price: 69_000 });
   });
 });

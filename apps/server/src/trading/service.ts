@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import {
   DEFAULT_CONFIG,
   applyFill,
@@ -15,6 +14,7 @@ import {
 import type {
   AccountEvent,
   AccountView,
+  Candle,
   Currency,
   Fill,
   FxTrade,
@@ -30,7 +30,7 @@ import type {
 } from '@stock/shared';
 import type { DatabaseSync } from 'node:sqlite';
 import type { MarketDataProvider } from '../market/provider';
-import { transaction } from './db';
+import { transaction } from './schema';
 import { TradingRepo, type AccountRow, type SnapshotRow } from './repo';
 
 /** 하루 = 한국시간 오전 7시 ~ 다음 날 오전 7시 (미국 장 끝난 뒤, 한국 장 열리기 전) */
@@ -79,6 +79,47 @@ export interface TradingServiceOptions {
 
 const EXPIRED = '장 마감까지 체결되지 않아 자동 취소됐어요';
 
+/** 감시가 이만큼 멈춰 있었으면 (앱이 꺼져 있었으면) 그동안의 봉으로 체결 확인 */
+const CATCH_UP_GAP = 60_000;
+const BAR_MS = 5 * 60_000;
+
+/**
+ * 감시가 멈춰 있던 [start, end) 동안 5분봉으로 주문이 닿았던 첫 봉과 체결 가격 찾기.
+ * - 지정가: 봉의 저가(매수)·고가(매도)가 지정가에 닿으면 지정가로 체결.
+ *   다만 장 시작 봉(예약주문)이나 창이 열린 뒤 시작한 봉의 시가가 이미 지정가보다 유리하면 시가로 체결
+ * - 시장가(예약): 첫 장중 봉의 시가로 체결
+ */
+export function findCatchUpFill(order: Order, bars: Candle[], start: number, end: number): { price: number; at: number; prevClose?: number } | null {
+  let session: number | undefined; // 지금 봉이 속한 장의 마감 시각
+  let lastClose: number | undefined; // 직전 장중 봉의 종가
+  let base: number | undefined; // 이 장 직전 장의 종가 (등락률용)
+  for (const bar of [...bars].sort((a, b) => a.time - b.time)) {
+    const t = bar.time * 1000;
+    if (t >= end) break;
+    if (!isMarketOpen(order.market, t)) continue;
+    const close = sessionCloseAt(order.market, t);
+    if (close !== session) {
+      session = close;
+      base = lastClose;
+    }
+    lastClose = bar.close;
+    if (t < start - BAR_MS) continue;
+
+    const at = Math.max(t, start);
+    if (order.type === 'market') return { price: bar.open, at, prevClose: base };
+    const limit = order.limitPrice;
+    if (limit === undefined) return null;
+    const buy = order.side === 'buy';
+    if (buy ? bar.low > limit : bar.high < limit) continue;
+    const opening = !isMarketOpen(order.market, t - BAR_MS);
+    const better = buy ? bar.open <= limit : bar.open >= limit;
+    const gap = (order.status === 'reserved' && opening) || (better && t > start);
+    const price = gap ? (buy ? Math.min(limit, bar.open) : Math.max(limit, bar.open)) : limit;
+    return { price, at, prevClose: base };
+  }
+  return null;
+}
+
 /**
  * 모의투자 계좌: 주문 → 체결 → 잔고 반영.
  * - 장중: 시장가는 바로 체결, 지정가는 가격이 닿을 때까지 대기
@@ -95,6 +136,8 @@ export class TradingService {
   private timer: ReturnType<typeof setInterval> | undefined;
   private snapshotTimer: ReturnType<typeof setInterval> | undefined;
   private processing = false;
+  /** 마지막으로 미체결 주문을 확인한 시각 (앱이 꺼져 있던 공백 감지용) */
+  private lastRunAt: number | undefined;
 
   constructor(o: TradingServiceOptions) {
     this.repo = new TradingRepo(o.db);
@@ -256,7 +299,7 @@ export class TradingService {
     const now = this.now();
     const open = this.isOpen(stock.market, quote);
     const order: Order = {
-      id: randomUUID(),
+      id: globalThis.crypto.randomUUID(),
       code: stock.code,
       market: stock.market,
       side: input.side,
@@ -325,12 +368,14 @@ export class TradingService {
     return saved;
   }
 
-  /** 미체결 주문 처리: 만료 취소 → 시세 확인 → 체결 */
+  /** 미체결 주문 처리: (공백 따라잡기) → 만료 취소 → 시세 확인 → 체결 */
   async processOpenOrders(): Promise<void> {
     if (this.processing) return;
     this.processing = true;
+    const now = this.now();
     try {
-      const now = this.now();
+      // 처음 돌거나 한동안 멈춰 있었으면 그사이 가격이 닿았던 주문부터 체결 (만료 취소보다 먼저)
+      if (this.lastRunAt === undefined || now - this.lastRunAt > CATCH_UP_GAP) await this.catchUp(this.lastRunAt);
       let open = this.openOrders();
       for (const o of open) if (o.expiresAt && now >= o.expiresAt) this.cancelOrder(o.id, EXPIRED);
       open = this.openOrders();
@@ -351,8 +396,49 @@ export class TradingService {
         }
       }
     } finally {
+      this.lastRunAt = now;
       this.processing = false;
       this.syncWatch();
+    }
+  }
+
+  /** 감시가 멈춰 있던 동안(since 이후) 5분봉을 보고, 가격이 닿았던 주문을 그 봉 시각으로 체결 */
+  private async catchUp(since?: number): Promise<void> {
+    const now = this.now();
+    const candles = new Map<string, Promise<Candle[]>>();
+    const hits: { order: Order; quote: Quote; at: number }[] = [];
+    for (const o of this.openOrders()) {
+      const start = Math.max(o.createdAt, since ?? 0);
+      const end = Math.min(o.expiresAt ?? now, now);
+      if (start >= end) continue;
+      let bars: Candle[];
+      try {
+        if (!candles.has(o.code)) candles.set(o.code, this.provider.getCandles(o.code, '5m', 300));
+        bars = await candles.get(o.code)!;
+      } catch {
+        continue; // 봉을 못 받으면 건너뜀 (기존처럼 만료되면 취소)
+      }
+      const hit = findCatchUpFill(o, bars, start, end);
+      if (!hit) continue;
+      const prevClose = hit.prevClose ?? hit.price;
+      const quote: Quote = {
+        code: o.code,
+        price: hit.price,
+        bid: hit.price,
+        ask: hit.price,
+        prevClose,
+        volume: 0,
+        change: hit.price - prevClose,
+        changeRate: prevClose ? (hit.price - prevClose) / prevClose : 0,
+        timestamp: hit.at,
+      };
+      hits.push({ order: o, quote, at: hit.at });
+    }
+    // 실제로 닿은 시간 순서대로 체결 (먼저 판 돈으로 나중에 사는 경우 등)
+    for (const h of hits.sort((x, y) => x.at - y.at)) {
+      const stock = await this.provider.getStock(h.order.code).catch(() => undefined);
+      // 호가 = 체결가로 두고 taker로 체결 → 정확히 그 가격에 체결 (잔고 확인·거부·알림은 평소 경로 그대로)
+      this.execute(h.order.id, h.quote, 'taker', stock, true, h.at);
     }
   }
 
@@ -441,11 +527,11 @@ export class TradingService {
   }
 
   /** 체결 시도. 체결되면 잔고·보유 반영하고 Fill 반환 */
-  private execute(orderId: string, quote: Quote, mode: FillMode, stock?: StockInfo, background = false): Fill | null {
+  private execute(orderId: string, quote: Quote, mode: FillMode, stock?: StockInfo, background = false, at = this.now()): Fill | null {
     const result = transaction<{ fill: Fill } | { rejected: Order } | null>(this.repo.db, () => {
       const order = this.repo.order(orderId);
       if (!order || (order.status !== 'pending' && order.status !== 'reserved')) return null;
-      const fill = tryFill({ order, quote, marketOpen: true, mode, now: this.now(), config: this.config });
+      const fill = tryFill({ order, quote, marketOpen: true, mode, now: at, config: this.config });
       if (!fill) return null;
 
       const acc = this.repo.account(order.accountId)!;
@@ -454,18 +540,18 @@ export class TradingService {
         // 예약 시장가는 장 시작 가격이 예상보다 비쌀 수 있어서 다시 확인
         const others = this.repo.holds(acc.id, order.id)[fill.currency];
         if (fill.amount + fill.commission > acc.cash[fill.currency] - others + 1e-9) {
-          this.repo.updateOrder(order.id, { status: 'rejected', reason: '체결 시점에 잔고가 부족해서 취소됐어요' }, this.now());
+          this.repo.updateOrder(order.id, { status: 'rejected', reason: '체결 시점에 잔고가 부족해서 취소됐어요' }, at);
           return { rejected: this.repo.order(order.id)! };
         }
       } else if ((positions[fill.code]?.qty ?? 0) < fill.qty) {
-        this.repo.updateOrder(order.id, { status: 'rejected', reason: '보유 수량이 부족해서 취소됐어요' }, this.now());
+        this.repo.updateOrder(order.id, { status: 'rejected', reason: '보유 수량이 부족해서 취소됐어요' }, at);
         return { rejected: this.repo.order(order.id)! };
       }
 
       const next = applyFill({ cash: acc.cash, positions }, fill);
       this.repo.setCash(acc.id, next.cash);
       this.repo.setPosition(acc.id, fill.code, next.positions[fill.code]);
-      this.repo.updateOrder(order.id, { status: 'filled' }, this.now());
+      this.repo.updateOrder(order.id, { status: 'filled' }, at);
       return { fill: this.repo.insertFill(acc.id, { ...fill, realizedPnl: next.realizedPnl, dayChangeRate: quote.changeRate }) };
     });
     if (!result) return null;
