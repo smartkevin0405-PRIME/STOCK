@@ -208,7 +208,9 @@ export type AccountEvent =
   | { event: 'fill'; fill: Fill; stock?: StockInfo; background?: boolean }
   | { event: 'order'; order: Order; stock?: StockInfo }
   | { event: 'fx'; trade: FxTrade }
-  | { event: 'reset'; season: number };
+  | { event: 'reset'; season: number }
+  /** 배당 입금·액면분할 반영 */
+  | { event: 'corporate'; actions: { code: string; kind: 'dividend' | 'split'; value: number; qty: number }[] };
 
 /** 서버 → 웹 WebSocket 메시지 */
 export type ServerMessage =

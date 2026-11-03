@@ -10,6 +10,7 @@ import { NaverSource, fetchNaverDirectory, fetchNaverRankings } from './market/n
 import type { MarketDataProvider } from './market/provider';
 import { openDb } from './trading/db';
 import { AlertService } from './trading/alerts';
+import { CorporateActions, fetchYahooEvents } from './trading/corporate';
 import { PushService, loadVapidKeys } from './trading/push';
 import { TradingService } from './trading/service';
 import { WatchlistService } from './trading/watchlist';
@@ -54,6 +55,11 @@ await provider.start();
 const db = openDb(join(dataDir, mode === 'mock' ? 'mock.db' : 'stock.db'));
 const trading = new TradingService({ db, provider });
 trading.start();
+// 배당·액면분할: 실제 시세일 때만, 시작할 때 + 6시간마다 확인
+const corporate = mode === 'mock' ? undefined : new CorporateActions(trading, provider, fetchYahooEvents);
+const runCorporate = () => void corporate?.run().catch((e: Error) => console.log(`[corporate] ${e.message}`));
+runCorporate();
+const corporateTimer = setInterval(runCorporate, 6 * 3_600_000);
 // 폰 푸시 키: 처음 실행 때 만들어 DATA_DIR/vapid.json에 저장 (환경변수 VAPID_PUBLIC_KEY/PRIVATE_KEY로 지정 가능)
 const vapid = loadVapidKeys(join(dataDir, 'vapid.json'));
 // 푸시 서비스가 문제 있을 때 연락할 주소 (배포할 때 본인 주소로 바꾸기)
@@ -62,6 +68,7 @@ const app = await buildApp({ provider, trading, watchlists: new WatchlistService
 await app.listen({ port, host });
 
 const shutdown = async () => {
+  clearInterval(corporateTimer);
   trading.stop();
   provider.stop();
   store?.stop();

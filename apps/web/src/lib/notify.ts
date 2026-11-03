@@ -15,5 +15,13 @@ export function handleAccountEvent(e: AccountEvent): void {
     toast(describeFill(e.fill, e.stock), 'info', `fill:${e.fill.orderId}`);
   } else if (e.event === 'order' && (e.order.status === 'rejected' || e.order.status === 'cancelled') && e.order.reason && e.order.reason !== '취소했어요') {
     toast(e.order.reason, 'error', `order:${e.order.id}:${e.order.status}`);
+  } else if (e.event === 'corporate') {
+    for (const a of e.actions) {
+      toast(
+        a.kind === 'dividend'
+          ? `💰 ${a.code} 배당금 ${a.value.toLocaleString()} 입금 (${a.qty.toLocaleString()}주, 세후)`
+          : `✂️ ${a.code} 액면분할 1:${a.value} 반영 → ${a.qty.toLocaleString()}주`,
+      );
+    }
   }
 }

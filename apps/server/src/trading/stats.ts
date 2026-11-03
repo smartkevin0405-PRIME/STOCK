@@ -10,6 +10,7 @@ import {
 } from '@stock/core';
 import type { Candle } from '@stock/shared';
 import type { MarketDataProvider } from '../market/provider';
+import { adjustForSplits } from './corporate';
 import type { TradingService } from './service';
 
 export type StatsPeriod = 'all' | 'month' | 'week';
@@ -69,9 +70,15 @@ export class StatsService {
     private readonly now: () => number = Date.now,
   ) {}
 
+  /** 시즌 체결 (액면분할 반영해서 수량·가격 환산) */
+  private fillsOf(accountId: number) {
+    const splits = this.trading.repo.corporateActions(accountId).filter((a) => a.kind === 'split');
+    return adjustForSplits(this.trading.repo.allFills(accountId), splits);
+  }
+
   async stats(period: StatsPeriod): Promise<StatsView> {
     const acc = this.trading.account();
-    const fills = this.trading.repo.allFills(acc.id);
+    const fills = this.fillsOf(acc.id);
     const [current, usdKrw] = await Promise.all([this.trading.currentValue(), this.provider.getUsdKrw().catch(() => 1_400)]);
 
     const from = periodStart(period, this.now());
@@ -127,7 +134,7 @@ export class StatsService {
   /** 규칙 기반 코치 + 집중도 (이번 시즌 전체 기록) */
   async coach(): Promise<CoachView> {
     const acc = this.trading.account();
-    const fills = this.trading.repo.allFills(acc.id) as CoachFill[];
+    const fills = this.fillsOf(acc.id) as CoachFill[];
     const [current, usdKrw] = await Promise.all([this.trading.currentValue(), this.provider.getUsdKrw().catch(() => 1_400)]);
     const stopLoss = this.trading.repo.getSetting('stopLossRate');
     const stopLossRate = stopLoss !== undefined ? Number(stopLoss) : undefined;

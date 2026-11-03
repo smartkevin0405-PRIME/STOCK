@@ -401,6 +401,11 @@ export class TradingService {
   // ── 내부 ──────────────────────────────────────────────
 
   /** 지금 시세로 계좌 평가 (원화 환산) */
+  /** 배당·분할 반영을 화면에 알림 */
+  notifyCorporate(actions: { code: string; kind: 'dividend' | 'split'; value: number; qty: number }[]): void {
+    this.emit({ event: 'corporate', actions: actions.map(({ code, kind, value, qty }) => ({ code, kind, value, qty })) });
+  }
+
   /** 지금 시즌 계좌를 지금 시세로 평가 */
   currentValue() {
     return this.valueOf(this.account());

@@ -21,6 +21,7 @@ const MA = [
   { period: 5, color: '#ff9f1a' },
   { period: 20, color: '#00b386' },
   { period: 60, color: '#8b5cf6' },
+  { period: 120, color: '#ec4899' },
 ] as const;
 
 /** 볼린저밴드: 20일 이동평균 ± 표준편차 2배 (가운데 선은 20일선과 같아서 위·아래 선만) */

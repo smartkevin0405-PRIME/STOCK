@@ -217,6 +217,25 @@ export class TradingRepo {
     return usd > 0 ? krw / usd : undefined;
   }
 
+  hasCorporateAction(accountId: number, code: string, kind: 'dividend' | 'split', date: number): boolean {
+    return !!this.db.prepare('SELECT 1 FROM corporate_actions WHERE account_id = ? AND code = ? AND kind = ? AND ex_date = ?').get(accountId, code, kind, date);
+  }
+
+  recordCorporateAction(accountId: number, code: string, kind: 'dividend' | 'split', date: number, value: number, now: number): void {
+    this.db
+      .prepare('INSERT OR IGNORE INTO corporate_actions (account_id, code, kind, ex_date, value, applied_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(accountId, code, kind, date, value, now);
+  }
+
+  corporateActions(accountId: number): { code: string; kind: 'dividend' | 'split'; date: number; value: number }[] {
+    return (this.db.prepare('SELECT * FROM corporate_actions WHERE account_id = ? ORDER BY ex_date').all(accountId) as Row[]).map((r) => ({
+      code: r.code as string,
+      kind: r.kind as 'dividend' | 'split',
+      date: r.ex_date as number,
+      value: r.value as number,
+    }));
+  }
+
   getSetting(key: string, userId = 1): string | undefined {
     const r = this.db.prepare('SELECT value FROM settings WHERE user_id = ? AND key = ?').get(userId, key) as { value: string } | undefined;
     return r?.value;

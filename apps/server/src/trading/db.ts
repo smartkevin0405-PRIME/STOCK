@@ -141,6 +141,18 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (user_id, key)
   );
   `,
+  // 배당·액면분할 반영 기록 (같은 이벤트 두 번 반영 방지)
+  `
+  CREATE TABLE corporate_actions (
+    account_id INTEGER NOT NULL,
+    code TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    ex_date INTEGER NOT NULL,
+    value REAL NOT NULL,
+    applied_at INTEGER NOT NULL,
+    PRIMARY KEY (account_id, code, kind, ex_date)
+  );
+  `,
 ];
 
 /** DB 열기 + 스키마 맞추기. ':memory:'는 테스트용 */
